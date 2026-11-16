@@ -367,8 +367,19 @@ textarea:focus-visible {
 }
 
 .fields.three {
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
+}
+
+/* 칸이 좁아도 숫자(예: 210)가 잘리지 않게 여백과 단위 글씨를 줄인다 */
+.fields.three .unit-input {
+  gap: 3px;
+  font-size: 11px;
+}
+
+.fields.three input[type='number'] {
+  min-width: 0;
+  padding: 0 4px 0 7px;
 }
 
 .size-head {

@@ -327,6 +327,13 @@ function WallItemMesh({ attached, selected, interactive, onSelect, onMove, onDra
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={up}
+      // 클릭이 뒤의 바닥·벽까지 전달되지 않게 + 짧은 우클릭으로도 선택
+      onClick={(e) => interactive && e.stopPropagation()}
+      onContextMenu={(e) => {
+        if (!interactive || e.delta > 4) return
+        e.stopPropagation()
+        onSelect()
+      }}
       onPointerOver={() => interactive && (document.body.style.cursor = 'grab')}
       onPointerOut={() => (document.body.style.cursor = '')}
     >

@@ -82,6 +82,14 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
       onPointerDown={handleDown}
       onPointerMove={handleMove}
       onPointerUp={handleUp}
+      // 손을 뗄 때 생기는 클릭이 뒤에 있는 바닥까지 전달돼 방이 선택되지 않게 막는다
+      onClick={(e) => interactive && e.stopPropagation()}
+      // 짧은 우클릭(끌지 않음)도 가구 선택. 끌면 화면 회전이라 무시
+      onContextMenu={(e) => {
+        if (!interactive || e.delta > 4) return
+        e.stopPropagation()
+        onSelect()
+      }}
       onPointerOver={() => (document.body.style.cursor = 'grab')}
       onPointerOut={() => (document.body.style.cursor = '')}
     >
