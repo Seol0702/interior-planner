@@ -1,25 +1,48 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import type { Finish, FurnitureInstance, Project, RoomShape, Selection, ViewMode, ViewName } from './types'
+import type {
+  Finish, FurnitureInstance, LayerView, Lighting, Note, Point, Project, RoomShape, Selection, Tool, ViewMode, ViewName, WallItem,
+} from './types'
 import { DEFAULT_PROJECT, loadFromBrowser, saveToBrowser } from './project'
 import { findLibraryItem } from './library'
-import { bounds, contains, footprint, newId, placeInPlan, roomRect } from './plan'
+import {
+  bounds, clampWallItem, contains, edgeLength, footprint, nearestEdge, newId, placeInPlan, roomRect, unionArea, wallItemSpan, wallPieces,
+} from './plan'
 import { smartSnap, type Box, type Guide } from './guides'
-import { snap } from './units'
-import Scene3D from './components/Scene3D'
+import { runChecks, type Issue } from './drc'
+import { sunDirection, sunPatches } from './sun'
+import type { WallItemPreset } from './structures'
+import { snap, toPyeong } from './units'
+import Scene3D, { type Visible } from './components/Scene3D'
 import Plan2D from './components/Plan2D'
 import RoomsPanel from './components/RoomsPanel'
 import LibraryPanel from './components/LibraryPanel'
 import SelectionPanel from './components/SelectionPanel'
+import { NoteCard, WallItemCard, WireCard } from './components/ItemCard'
 import FilePanel from './components/FilePanel'
-import ViewBar from './components/ViewBar'
+import SunPanel from './components/SunPanel'
+import DrcPanel from './components/DrcPanel'
+import NotesPanel from './components/NotesPanel'
+import RecommendPanel from './components/RecommendPanel'
+import ViewBar, { LAYERS } from './components/ViewBar'
 import type { ViewRequest } from './components/CameraRig'
 
+type SideTab = 'build' | 'check' | 'more'
+
 /** 모든 가구를 (바뀐) 방 안으로 다시 맞춰 넣기 */
-const refit = (furniture: FurnitureInstance[], rooms: RoomShape[]) =>
-  furniture.map((f) => {
+const refit = (furniture: FurnitureInstance[], rooms: RoomShape[]) => {
+  const pieces = wallPieces(rooms)
+  return furniture.map((f) => {
     const item = findLibraryItem(f.libraryId)
-    return item ? placeInPlan(f, item, rooms) : f
+    return item ? placeInPlan(f, item, rooms, pieces) : f
+  })
+}
+
+/** 문·창문·콘센트를 (바뀐) 방의 변 안으로 다시 맞추고, 사라진 방의 것은 지운다 */
+const refitWallItems = (items: WallItem[], rooms: RoomShape[]) =>
+  items.flatMap((i) => {
+    const room = rooms.find((r) => r.id === i.roomId)
+    return room ? [clampWallItem(i, room)] : []
   })
 
 /** 가구가 바닥에서 차지하는 자리 (중심 + 크기) */
@@ -30,6 +53,13 @@ const boxOf = (f: FurnitureInstance): Box | null => {
   return { x: f.x, y: f.y, w, d }
 }
 
+/** 레이어 보기 → 무엇을 보여줄지 */
+const layerFlags = (layer: LayerView) => ({
+  walls: true,
+  furniture: layer === 'all' || layer === 'furniture',
+  electric: layer === 'all' || layer === 'electric',
+})
+
 export default function App() {
   // useState: 화면에 영향을 주는 값. 바뀌면 화면이 자동으로 다시 그려진다
   const [project, setProject] = useState<Project>(loadFromBrowser) // 처음 켤 때 자동 저장분 불러오기
@@ -37,7 +67,14 @@ export default function App() {
   const [guides, setGuides] = useState<Guide[]>([]) // 지금 떠 있는 스마트 가이드
   const [mode, setMode] = useState<ViewMode>('3d')
   const [viewRequest, setViewRequest] = useState<ViewRequest | null>(null)
-  const [sceneKey, setSceneKey] = useState(0) // 불러오기 때 3D 화면을 새로 시작시키는 번호
+  const [sceneKey, setSceneKey] = useState(0) // 불러오기 때 방 목록 패널을 새로 시작시키는 번호
+  const [sideTab, setSideTab] = useState<SideTab>('build')
+  const [layer, setLayer] = useState<LayerView>('all')
+  const [tool, setTool] = useState<Tool>('select')
+  const [draft, setDraft] = useState<Point[] | null>(null) // 그리고 있는 전선의 점들
+  const [notesVisible, setNotesVisible] = useState(true)
+  const [notesExpanded, setNotesExpanded] = useState(false)
+  const [lighting, setLighting] = useState<Lighting>({ enabled: false, time: 14, season: 'equinox', night: false, lamps: false })
   const cameraRef = useRef<THREE.Camera | null>(null)
 
   // 마우스를 빠르게 움직이면 화면이 다시 그려지기 전에 다음 이벤트가 올 수 있다.
@@ -51,12 +88,43 @@ export default function App() {
   // project가 바뀔 때마다 브라우저에 자동 저장
   useEffect(() => saveToBrowser(project), [project])
 
-  const { rooms, furniture } = project
-  const selectedRoom = selection?.type === 'room' ? rooms.find((r) => r.id === selection.id) : undefined
-  const selectedFurniture = selection?.type === 'furniture' ? furniture.find((f) => f.id === selection.id) : undefined
+  const { rooms, furniture, wallItems, wires, notes } = project
+  const find = <T extends { id: string }>(type: NonNullable<Selection>['type'], list: T[]) =>
+    selection?.type === type ? list.find((o) => o.id === selection.id) : undefined
+  const selectedRoom = find('room', rooms)
+  const selectedFurniture = find('furniture', furniture)
   const selectedItem = selectedFurniture ? findLibraryItem(selectedFurniture.libraryId) : undefined
+  const selectedWallItem = find('wallItem', wallItems)
+  const selectedWire = find('wire', wires)
+  const selectedNote = find('note', notes)
+
+  // useMemo: 계산이 무거운 값은 재료(rooms 등)가 바뀔 때만 다시 계산
+  const pieces = useMemo(() => wallPieces(rooms), [rooms])
+  const issues = useMemo(() => runChecks(project, pieces), [project, pieces])
+  const sun = useMemo(() => sunDirection(lighting.time, lighting.season, project.north), [lighting.time, lighting.season, project.north])
+  const patches = useMemo(
+    () => (lighting.enabled && !lighting.night ? sunPatches(project, pieces, sun) : []),
+    [lighting.enabled, lighting.night, project, pieces, sun],
+  )
+  const visible: Visible = { ...layerFlags(layer), notes: notesVisible, expandNotes: notesExpanded }
+  const shownIssues = layer === 'all' ? issues : []
+
+  /** 물건을 놓을 방: 선택한 방 → 선택한 것이 있는 방 → 첫 번째 방 */
+  const targetRoom = () => {
+    const p = latest.current
+    if (selectedRoom) return selectedRoom
+    if (selectedWallItem) return p.rooms.find((r) => r.id === selectedWallItem.roomId) ?? p.rooms[0]
+    if (selectedFurniture) return p.rooms.find((r) => contains(roomRect(r), selectedFurniture.x, selectedFurniture.y)) ?? p.rooms[0]
+    return p.rooms[0]
+  }
 
   // ───────── 방 ─────────
+
+  /** 방 목록을 바꾸고, 가구와 문·창문을 새 방 모양에 맞춘다 */
+  const commitRooms = (nextRooms: RoomShape[], nextFurniture = latest.current.furniture) => {
+    const p = latest.current
+    commit({ ...p, rooms: nextRooms, furniture: refit(nextFurniture, nextRooms), wallItems: refitWallItems(p.wallItems, nextRooms) })
+  }
 
   const addRoom = () => {
     const p = latest.current
@@ -72,23 +140,20 @@ export default function App() {
       wall: last.wall,
       floor: last.floor,
     }
-    commit({ ...p, rooms: [...p.rooms, room] })
+    commitRooms([...p.rooms, room])
     setSelection({ type: 'room', id: room.id })
     setViewRequest({ view: 'iso', nonce: Date.now() }) // 새 방까지 한눈에 보이게 시점을 다시 맞춘다
     return room.id
   }
 
   const updateRoom = (id: string, patch: Partial<RoomShape>) => {
-    const p = latest.current
-    const nextRooms = p.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r))
-    commit({ ...p, rooms: nextRooms, furniture: refit(p.furniture, nextRooms) })
+    commitRooms(latest.current.rooms.map((r) => (r.id === id ? { ...r, ...patch } : r)))
   }
 
   const deleteRoom = (id: string) => {
     const p = latest.current
     if (p.rooms.length <= 1) return
-    const nextRooms = p.rooms.filter((r) => r.id !== id)
-    commit({ ...p, rooms: nextRooms, furniture: refit(p.furniture, nextRooms) })
+    commitRooms(p.rooms.filter((r) => r.id !== id))
     setSelection(null)
   }
 
@@ -121,8 +186,7 @@ export default function App() {
     // 그 방 안에 있던 가구는 방과 함께 옮긴다
     const rect = roomRect(room)
     const moved = p.furniture.map((f) => (contains(rect, f.x, f.y) ? { ...f, x: f.x + dx, y: f.y + dy } : f))
-    const nextRooms = p.rooms.map((r) => (r.id === id ? { ...r, x, y } : r))
-    commit({ ...p, rooms: nextRooms, furniture: refit(moved, nextRooms) })
+    commitRooms(p.rooms.map((r) => (r.id === id ? { ...r, x, y } : r)), moved)
   }
 
   /** 벽지·장판 바르기. 방을 선택했으면 그 방만, 아니면 모든 방 */
@@ -131,17 +195,49 @@ export default function App() {
     commit({ ...p, rooms: p.rooms.map((r) => (!selectedRoom || r.id === selectedRoom.id ? { ...r, [kind]: finish } : r)) })
   }
 
+  // ───────── 문·창문·콘센트 ─────────
+
+  const addWallItem = (preset: WallItemPreset) => {
+    const p = latest.current
+    const room = targetRoom()
+    // 처음 붙일 벽: 문은 아래쪽, 창문은 위쪽, 콘센트는 왼쪽 벽. 같은 벽에 이미 있으면 옆으로 비켜 놓는다
+    const side = preset.kind === 'door' ? 'S' : preset.kind === 'window' ? 'N' : 'W'
+    const same = p.wallItems.filter((i) => i.roomId === room.id && i.side === side).length
+    const length = edgeLength(room, side)
+    const item = clampWallItem(
+      { id: newId(), kind: preset.kind, roomId: room.id, side, offset: length / 2 + same * (preset.width + 200), width: preset.width, height: Math.min(preset.height, p.wallHeight - preset.sill), sill: preset.sill },
+      room,
+    )
+    commit({ ...p, wallItems: [...p.wallItems, item] })
+    setSelection({ type: 'wallItem', id: item.id })
+  }
+
+  const changeWallItem = (id: string, patch: Partial<WallItem>) => {
+    const p = latest.current
+    commit({
+      ...p,
+      wallItems: p.wallItems.map((i) => {
+        if (i.id !== id) return i
+        const next = { ...i, ...patch }
+        const room = p.rooms.find((r) => r.id === next.roomId)
+        return room ? clampWallItem(next, room) : i
+      }),
+    })
+  }
+
+  /** 2D에서 끌기: 마우스에서 가장 가까운 벽(방의 변)에 붙인다 */
+  const moveWallItem = (id: string, x: number, y: number) => {
+    const edge = nearestEdge(latest.current.rooms, x, y)
+    if (edge) changeWallItem(id, { roomId: edge.roomId, side: edge.side, offset: snap(edge.offset) })
+  }
+
   // ───────── 가구 ─────────
 
   const addFurniture = (libraryId: string) => {
     const p = latest.current
     const item = findLibraryItem(libraryId)
     if (!item) return
-    // 놓을 방: 선택한 방 → 선택한 가구가 있는 방 → 첫 번째 방
-    const room =
-      selectedRoom ??
-      (selectedFurniture && p.rooms.find((r) => contains(roomRect(r), selectedFurniture.x, selectedFurniture.y))) ??
-      p.rooms[0]
+    const room = targetRoom()
     const instance = placeInPlan(
       { id: newId(), libraryId, x: snap(room.x + room.width / 2), y: snap(room.y + room.depth / 2), rotation: 0 },
       item,
@@ -189,13 +285,6 @@ export default function App() {
     if (selectedFurniture) changeFurniture(selectedFurniture.id, (f) => ({ ...f, rotation: (f.rotation + 90) % 360 }))
   }
 
-  const deleteSelected = () => {
-    if (!selectedFurniture) return
-    const p = latest.current
-    commit({ ...p, furniture: p.furniture.filter((f) => f.id !== selectedFurniture.id) })
-    setSelection(null)
-  }
-
   const duplicateSelected = () => {
     if (!selectedFurniture || !selectedItem) return
     const p = latest.current
@@ -223,7 +312,7 @@ export default function App() {
   const nudge = (right: number, forward: number, step: number) => {
     if (!selectedFurniture) return
     let fx = 0
-    let fy = -1 // 2D 평면도 기준: 위쪽 키 = 북쪽
+    let fy = -1 // 2D 평면도 기준: 위쪽 키 = 평면도 위쪽
     const camera = cameraRef.current
     if (mode === '3d' && camera) {
       const dir = camera.getWorldDirection(new THREE.Vector3())
@@ -244,14 +333,118 @@ export default function App() {
     changeFurniture(selectedFurniture.id, (f) => ({ ...f, x: f.x + dx, y: f.y + dy }))
   }
 
+  // ───────── 전선·메모 ─────────
+
+  /** 전선의 점을 붙일 만한 자리: 콘센트, 멀티탭, 조명 */
+  const wireAnchors = (): Point[] => {
+    const p = latest.current
+    const anchors: Point[] = []
+    for (const i of p.wallItems) {
+      const room = p.rooms.find((r) => r.id === i.roomId)
+      if (i.kind === 'outlet' && room) {
+        const s = wallItemSpan(i, room)
+        anchors.push({ x: s.cx, y: s.cy })
+      }
+    }
+    for (const f of p.furniture) {
+      const item = findLibraryItem(f.libraryId)
+      if (item && (item.layer === 'electric' || item.light)) anchors.push({ x: f.x, y: f.y })
+    }
+    return anchors
+  }
+
+  const addWirePoint = (x: number, y: number) => {
+    const points = draft ?? []
+    const last = points[points.length - 1]
+    let next: Point = { x: snap(x), y: snap(y) }
+    // 콘센트·멀티탭 근처면 거기에 붙이고, 아니면 앞 점과 가로·세로가 거의 맞을 때 반듯하게 맞춘다
+    const anchor = wireAnchors().find((a) => Math.hypot(a.x - x, a.y - y) < 200)
+    if (anchor) next = anchor
+    else if (last) {
+      if (Math.abs(next.x - last.x) < 80) next.x = last.x
+      if (Math.abs(next.y - last.y) < 80) next.y = last.y
+    }
+    if (last && last.x === next.x && last.y === next.y) return // 같은 자리를 두 번 누른 경우
+    setDraft([...points, next])
+  }
+
+  const finishWire = () => {
+    if (draft && draft.length >= 2) {
+      const p = latest.current
+      const wire = { id: newId(), points: draft }
+      commit({ ...p, wires: [...p.wires, wire] })
+      setSelection({ type: 'wire', id: wire.id })
+    }
+    setDraft(null)
+    setTool('select')
+  }
+
+  const addNote = (x: number, y: number) => {
+    const p = latest.current
+    const note: Note = { id: newId(), x: snap(x), y: snap(y), text: '' }
+    commit({ ...p, notes: [...p.notes, note] })
+    setSelection({ type: 'note', id: note.id })
+    setNotesVisible(true)
+    setTool('select')
+  }
+
+  const changeNote = (id: string, patch: Partial<Note>) => {
+    const p = latest.current
+    commit({ ...p, notes: p.notes.map((n) => (n.id === id ? { ...n, ...patch } : n)) })
+  }
+
+  /** 도구를 든 채로 바닥(평면)을 눌렀을 때 */
+  const planClick = (x: number, y: number) => {
+    if (tool === 'wire') addWirePoint(x, y)
+    else if (tool === 'note') addNote(x, y)
+  }
+
+  const changeTool = (next: Tool) => {
+    setTool(next)
+    setDraft(null)
+    if (next !== 'select') {
+      setSelection(null)
+      setLayer('all') // 전선·메모가 보이는 상태에서 그리게
+    }
+  }
+
+  /** 선택한 것 지우기 (방은 방 목록에서만 지운다) */
+  const deleteSelected = () => {
+    if (!selection || selection.type === 'room') return
+    const p = latest.current
+    const without = <T extends { id: string }>(list: T[]) => list.filter((o) => o.id !== selection.id)
+    if (selection.type === 'furniture') commit({ ...p, furniture: without(p.furniture) })
+    if (selection.type === 'wallItem') commit({ ...p, wallItems: without(p.wallItems) })
+    if (selection.type === 'wire') commit({ ...p, wires: without(p.wires) })
+    if (selection.type === 'note') commit({ ...p, notes: without(p.notes) })
+    setSelection(null)
+  }
+
+  /** 2D 평면도에서 무언가를 끌어 옮길 때 */
+  const moveOnPlan = (type: 'room' | 'furniture' | 'wallItem' | 'note', id: string, x: number, y: number) => {
+    if (type === 'room') moveRoom(id, x, y)
+    else if (type === 'furniture') moveFurniture(id, x, y)
+    else if (type === 'wallItem') moveWallItem(id, x, y)
+    else changeNote(id, { x: snap(x), y: snap(y) })
+  }
+
+  /** 검사 목록에서 항목을 누르면 문제가 된 것을 선택하고 보이게 한다 */
+  const pickIssue = (issue: Issue) => {
+    setSelection(issue.target)
+    setLayer('all')
+  }
+
   // ───────── 파일 ─────────
 
   /** 파일에서 불러온 프로젝트로 통째로 바꾸기 */
   const replaceProject = (next: Project) => {
-    commit({ ...next, furniture: refit(next.furniture, next.rooms) })
+    commit({ ...next, furniture: refit(next.furniture, next.rooms), wallItems: refitWallItems(next.wallItems, next.rooms) })
     setSelection(null)
     setGuides([])
-    setSceneKey((k) => k + 1)
+    setDraft(null)
+    setTool('select')
+    setSceneKey((k) => k + 1) // 방 목록의 펼침 상태를 처음으로
+    setViewRequest({ view: 'iso', nonce: Date.now() }) // 새 집 전체가 보이게 시점을 맞춘다
   }
 
   // ───────── 단축키 ─────────
@@ -260,14 +453,25 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       // 입력칸에 글자를 치는 중이면 단축키 무시
       const el = e.target as HTMLElement
-      if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return
+      if (e.ctrlKey || e.metaKey || e.altKey) return
       const step = e.shiftKey ? 100 : 10 // 방향키: 1cm, Shift와 함께: 10cm
       // e.code는 한/영 입력 상태와 상관없이 "자판 위치"로 판단 (한글 모드에서 R = ㄱ)
       switch (e.code) {
         case 'KeyR': rotateSelected(); break
+        case 'KeyV': {
+          // 보기 전환: 전체 → 가구 → 전기 → 구조 → 전체 …
+          const i = LAYERS.findIndex((l) => l.id === layer)
+          setLayer(LAYERS[(i + 1) % LAYERS.length].id)
+          break
+        }
         case 'Delete':
         case 'Backspace': deleteSelected(); break
-        case 'Escape': setSelection(null); break
+        case 'Enter': if (tool === 'wire') finishWire(); break
+        case 'Escape':
+          if (tool !== 'select') changeTool('select')
+          else setSelection(null)
+          break
         case 'ArrowUp': nudge(0, 1, step); break
         case 'ArrowDown': nudge(0, -1, step); break
         case 'ArrowLeft': nudge(-1, 0, step); break
@@ -281,61 +485,142 @@ export default function App() {
   })
 
   const finishSource = selectedRoom ?? rooms[0]
+  const target = targetRoom()
+  const errorCount = issues.filter((i) => i.level !== 'info').length
+  const wallItemRoom = selectedWallItem && rooms.find((r) => r.id === selectedWallItem.roomId)
 
   return (
     <div className="app">
       <aside className="sidebar">
         <h1>3D 인테리어 플래너</h1>
-        <RoomsPanel
-          key={sceneKey}
-          rooms={rooms}
-          wallHeight={project.wallHeight}
-          selection={selection}
-          onSelect={(id) => setSelection({ type: 'room', id })}
-          onChange={updateRoom}
-          onAdd={addRoom}
-          onDelete={deleteRoom}
-          onWallHeight={(wallHeight) => commit({ ...latest.current, wallHeight })}
-        />
-        <LibraryPanel
-          targetLabel={selectedRoom ? selectedRoom.name : rooms.length > 1 ? '모든 방 (방을 선택하면 그 방만)' : rooms[0].name}
-          wall={finishSource.wall}
-          floor={finishSource.floor}
-          onAddFurniture={addFurniture}
-          onApplyFinish={applyFinish}
-        />
-        <FilePanel project={project} onLoad={replaceProject} onReset={() => replaceProject(DEFAULT_PROJECT)} />
-        <details className="panel help">
-          <summary>조작법</summary>
-          <ul>
-            <li>가구 드래그: 이동 (가까운 정렬 위치에 붙고 안내선 표시)</li>
-            <li>방향키: 1cm 이동 · Shift+방향키: 10cm</li>
-            <li>R: 회전 · Delete: 삭제 · Esc: 선택 해제</li>
-            <li>빈 곳 왼쪽 드래그: 시점 이동</li>
-            <li>오른쪽 드래그 (또는 Ctrl+드래그): 시점 회전</li>
-            <li>휠: 확대/축소</li>
-            <li>2D 평면도에서 방을 끌어 위치 변경</li>
-          </ul>
-        </details>
+        <div className="side-tabs" role="tablist">
+          <button role="tab" aria-selected={sideTab === 'build'} className={sideTab === 'build' ? 'active' : ''} onClick={() => setSideTab('build')}>
+            꾸미기
+          </button>
+          <button role="tab" aria-selected={sideTab === 'check'} className={sideTab === 'check' ? 'active' : ''} onClick={() => setSideTab('check')}>
+            햇빛·검사{errorCount > 0 && <span className="count">{errorCount}</span>}
+          </button>
+          <button role="tab" aria-selected={sideTab === 'more'} className={sideTab === 'more' ? 'active' : ''} onClick={() => setSideTab('more')}>
+            메모·추천
+          </button>
+        </div>
+
+        {sideTab === 'build' && (
+          <>
+            <RoomsPanel
+              key={sceneKey}
+              rooms={rooms}
+              wallHeight={project.wallHeight}
+              selection={selection}
+              onSelect={(id) => setSelection({ type: 'room', id })}
+              onChange={updateRoom}
+              onAdd={addRoom}
+              onDelete={deleteRoom}
+              onWallHeight={(wallHeight) => commit({ ...latest.current, wallHeight })}
+            />
+            <LibraryPanel
+              targetLabel={selectedRoom ? selectedRoom.name : rooms.length > 1 ? `모든 방 / 놓을 때는 ${target.name}` : rooms[0].name}
+              wall={finishSource.wall}
+              floor={finishSource.floor}
+              wiring={tool === 'wire'}
+              onAddFurniture={addFurniture}
+              onAddWallItem={addWallItem}
+              onToggleWire={() => changeTool(tool === 'wire' ? 'select' : 'wire')}
+              onApplyFinish={applyFinish}
+            />
+            <FilePanel project={project} onLoad={replaceProject} onReset={() => replaceProject(DEFAULT_PROJECT)} />
+            <details className="panel help">
+              <summary>조작법</summary>
+              <ul>
+                <li>가구 드래그: 이동 (가까운 정렬 위치에 붙고 안내선 표시)</li>
+                <li>방향키: 1cm 이동 · Shift+방향키: 10cm</li>
+                <li>R: 회전 · Delete: 삭제 · Esc: 선택 해제</li>
+                <li>V: 보기 전환 (전체 → 가구 → 전기 → 구조)</li>
+                <li>빈 곳 왼쪽 드래그: 시점 이동</li>
+                <li>오른쪽 드래그 (또는 Ctrl+드래그): 시점 회전</li>
+                <li>휠: 확대/축소</li>
+                <li>2D 평면도에서 방·문·창문·콘센트·메모를 끌어 위치 변경</li>
+                <li>전선 그리기: 차례로 클릭 → Enter 또는 더블클릭으로 끝</li>
+              </ul>
+            </details>
+          </>
+        )}
+
+        {sideTab === 'check' && (
+          <>
+            <SunPanel
+              lighting={lighting}
+              north={project.north}
+              rooms={rooms}
+              patches={patches}
+              hasWindows={wallItems.some((i) => i.kind === 'window')}
+              onChange={(patch) => setLighting((l) => ({ ...l, ...patch }))}
+              onNorth={(north) => commit({ ...latest.current, north })}
+            />
+            <DrcPanel issues={issues} onPick={pickIssue} />
+          </>
+        )}
+
+        {sideTab === 'more' && (
+          <>
+            <NotesPanel
+              notes={notes}
+              selection={selection}
+              placing={tool === 'note'}
+              visible={notesVisible}
+              expanded={notesExpanded}
+              onTogglePlacing={() => changeTool(tool === 'note' ? 'select' : 'note')}
+              onVisible={setNotesVisible}
+              onExpanded={setNotesExpanded}
+              onSelect={(id) => {
+                setSelection({ type: 'note', id })
+                setNotesVisible(true)
+              }}
+            />
+            <RecommendPanel pyeong={toPyeong(unionArea(rooms.map(roomRect)))} roomCount={rooms.length} />
+          </>
+        )}
       </aside>
 
       <main className={`viewport mode-${mode}`}>
         <ViewBar
           mode={mode}
+          layer={layer}
+          tool={tool}
           onMode={setMode}
           onView={(view: ViewName) => setViewRequest({ view, nonce: Date.now() })}
+          onLayer={setLayer}
+          onTool={changeTool}
         />
+        {tool !== 'select' && (
+          <div className="toolhint" role="status">
+            {tool === 'wire'
+              ? `전선 그리기: 바닥을 차례로 눌러 점을 찍으세요${draft ? ` (${draft.length}개)` : ''} · Enter 또는 더블클릭으로 끝 · Esc 취소`
+              : '메모 찍기: 메모를 남길 자리를 누르세요 · Esc 취소'}
+            {tool === 'wire' && draft && draft.length >= 2 && (
+              <button className="small" onClick={finishWire}>
+                완료
+              </button>
+            )}
+          </div>
+        )}
         <div className="views">
           {mode !== '3d' && (
             <div className="view">
               <Plan2D
-                rooms={rooms}
-                furniture={furniture}
+                project={project}
+                pieces={pieces}
                 selection={selection}
                 guides={guides}
+                issues={shownIssues}
+                patches={patches}
+                visible={visible}
+                tool={tool}
+                draft={draft}
                 onSelect={setSelection}
-                onMoveFurniture={moveFurniture}
-                onMoveRoom={moveRoom}
+                onPlanClick={planClick}
+                onFinishWire={finishWire}
+                onMove={moveOnPlan}
                 onDragEnd={() => setGuides([])}
               />
             </div>
@@ -343,19 +628,28 @@ export default function App() {
           {mode !== '2d' && (
             <div className="view">
               <Scene3D
-                key={sceneKey}
                 project={project}
+                pieces={pieces}
                 selection={selection}
                 guides={guides}
+                issues={shownIssues}
+                visible={visible}
+                tool={tool}
+                draft={draft}
+                lighting={lighting}
+                sun={sun}
                 viewRequest={viewRequest}
                 cameraRef={cameraRef}
                 onSelect={setSelection}
+                onFloorClick={(roomId, x, y) => (tool === 'select' ? setSelection({ type: 'room', id: roomId }) : planClick(x, y))}
                 onMoveFurniture={moveFurniture}
                 onDragEnd={() => setGuides([])}
               />
             </div>
           )}
         </div>
+
+        {/* 선택한 것의 정보 카드 (화면 오른쪽 아래) */}
         {selectedFurniture && selectedItem && (
           <SelectionPanel
             key={selectedFurniture.id}
@@ -367,6 +661,17 @@ export default function App() {
             onRecolor={recolorSelected}
           />
         )}
+        {selectedWallItem && wallItemRoom && (
+          <WallItemCard
+            key={selectedWallItem.id}
+            item={selectedWallItem}
+            room={wallItemRoom}
+            onChange={(patch) => changeWallItem(selectedWallItem.id, patch)}
+            onDelete={deleteSelected}
+          />
+        )}
+        {selectedWire && <WireCard wire={selectedWire} onDelete={deleteSelected} />}
+        {selectedNote && <NoteCard key={selectedNote.id} note={selectedNote} onChange={(text) => changeNote(selectedNote.id, { text })} onDelete={deleteSelected} />}
       </main>
     </div>
   )

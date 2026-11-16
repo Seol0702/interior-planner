@@ -22,7 +22,35 @@ export type RoomShape = {
   depth: number // 세로
   wall: Finish // 벽지
   floor: Finish // 장판
+  open?: boolean // true면 옆방과 벽 없이 이어진다 (ㄱ자 방 만들 때)
 }
+
+/** 방의 네 변: 북(위)·동(오른쪽)·남(아래)·서(왼쪽) */
+export type Side = 'N' | 'E' | 'S' | 'W'
+
+export type WallItemKind = 'door' | 'window' | 'outlet'
+
+/** 벽에 붙는 것: 문·창문·콘센트. "어느 방의 어느 변, 모서리에서 얼마나 떨어진 곳"으로 위치를 적는다 */
+export type WallItem = {
+  id: string
+  kind: WallItemKind
+  roomId: string
+  side: Side
+  offset: number // 변의 시작(왼쪽 또는 위쪽) 모서리에서 중심까지 거리
+  width: number
+  height: number
+  sill: number // 바닥에서 아랫부분까지 높이 (문은 0)
+  flip?: boolean // 문: 경첩이 반대쪽
+  outward?: boolean // 문: 방 바깥쪽으로 열림
+}
+
+export type Point = { x: number; y: number }
+
+/** 전선: 바닥을 따라가는 꺾은선 */
+export type Wire = { id: string; points: Point[] }
+
+/** 메모: 원하는 자리에 찍는 점 + 글 */
+export type Note = { id: string; x: number; y: number; text: string }
 
 /** 가구 모양 종류 (박스가 아닌 실제 형태) */
 export type ShapeId =
@@ -44,6 +72,8 @@ export type ShapeId =
   | 'fridge'
   | 'drawers'
   | 'washer'
+  | 'powerStrip'
+  | 'ceilingLight'
 
 /** 가구 라이브러리에 들어있는 "부품" (KiCad의 심볼+풋프린트 같은 것) */
 export type FurnitureLibraryItem = {
@@ -56,6 +86,9 @@ export type FurnitureLibraryItem = {
   height: number // 높이 (H)
   color: string // 본체 색
   accent: string // 포인트 색 (쿠션, 문짝 등)
+  layer: 'furniture' | 'electric' // 어느 보기(레이어)에 속하는지
+  mount?: 'ceiling' // 천장에 다는 물건
+  light?: boolean // 빛을 내는 조명인지
 }
 
 /** 방에 실제로 배치된 가구 하나 */
@@ -71,14 +104,35 @@ export type FurnitureInstance = {
 
 /** 저장 파일(JSON) 한 개에 들어가는 전체 내용 */
 export type Project = {
-  version: 2
+  version: 3
   wallHeight: number // 천장 높이
+  north: number // 평면도 위쪽이 가리키는 방위 (0 = 북, 90 = 동, 180 = 남, 270 = 서)
   rooms: RoomShape[]
+  wallItems: WallItem[]
   furniture: FurnitureInstance[]
+  wires: Wire[]
+  notes: Note[]
 }
 
-/** 지금 선택된 것 (방 또는 가구) */
-export type Selection = { type: 'room' | 'furniture'; id: string } | null
+/** 지금 선택된 것 */
+export type Selection = { type: 'room' | 'furniture' | 'wallItem' | 'wire' | 'note'; id: string } | null
+
+/** 마우스 도구: 선택(기본) / 전선 그리기 / 메모 찍기 */
+export type Tool = 'select' | 'wire' | 'note'
+
+/** 레이어 보기: KiCad에서 앞면·뒷면만 보듯, 보고 싶은 종류만 보기 */
+export type LayerView = 'all' | 'furniture' | 'electric' | 'structure'
+
+export type Season = 'summer' | 'equinox' | 'winter'
+
+/** 햇빛·조명 설정 */
+export type Lighting = {
+  enabled: boolean // 햇빛·그림자 효과 켜기
+  time: number // 시각 (시 단위, 예: 14.5 = 오후 2시 30분)
+  season: Season
+  night: boolean // 밤 (해 없음)
+  lamps: boolean // 실내 조명 켜기
+}
 
 export type ViewMode = '3d' | '2d' | 'split'
 export type ViewName = 'iso' | 'top' | 'side0' | 'side90' | 'side180' | 'side270'

@@ -3,7 +3,8 @@ import type { FurnitureLibraryItem, ShapeId } from './types'
 const item = (
   id: string, name: string, category: string, shape: ShapeId,
   width: number, depth: number, height: number, color: string, accent: string,
-): FurnitureLibraryItem => ({ id, name, category, shape, width, depth, height, color, accent })
+  extra: Partial<FurnitureLibraryItem> = {},
+): FurnitureLibraryItem => ({ id, name, category, shape, width, depth, height, color, accent, layer: 'furniture', ...extra })
 
 // 기본 가구 라이브러리 (치수는 흔한 제품 크기 기준, mm)
 // 나중에 3단계에서 가격·구매 링크·사용자 등록 가구를 붙일 예정
@@ -13,7 +14,6 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('coffee-table', '소파 테이블', '거실', 'table', 1000, 600, 400, '#a58a6d', '#a58a6d'),
   item('tv-stand', 'TV장 + TV', '거실', 'tvUnit', 1800, 400, 1250, '#b59b7c', '#e9e2d6'),
   item('rug', '러그', '거실', 'rug', 2000, 1400, 12, '#c9bba8', '#e6dccb'),
-  item('floor-lamp', '플로어 램프', '거실', 'lamp', 400, 400, 1600, '#3f3f46', '#f3e9d2'),
   item('plant', '화분', '거실', 'plant', 500, 500, 1200, '#c08a6a', '#5c8a50'),
 
   item('bed-queen', '퀸 침대', '침실', 'bed', 1600, 2100, 900, '#b39b82', '#8fa3b5'),
@@ -34,7 +34,15 @@ export const LIBRARY: FurnitureLibraryItem[] = [
 
   item('washer', '세탁기', '가전', 'washer', 600, 650, 850, '#eceef0', '#cfd4da'),
   item('box', '수납 박스', '가전', 'box', 600, 400, 400, '#c9b79f', '#c9b79f'),
+
+  item('floor-lamp', '플로어 램프', '조명', 'lamp', 400, 400, 1600, '#3f3f46', '#f3e9d2', { light: true }),
+  item('ceiling-light', '천장등', '조명', 'ceilingLight', 500, 500, 90, '#e7e5e4', '#fff7e6', { light: true, mount: 'ceiling' }),
+
+  item('power-strip', '멀티탭', '전기', 'powerStrip', 300, 60, 40, '#f4f4f5', '#dc2626', { layer: 'electric' }),
 ]
+
+/** 다른 가구와 겹쳐도 되는 물건인가 (러그, 천장등, 멀티탭) */
+export const isPassable = (i: FurnitureLibraryItem) => i.shape === 'rug' || i.mount === 'ceiling' || i.shape === 'powerStrip'
 
 /** 가구 분류 목록 (라이브러리에 나온 순서대로) */
 export const FURNITURE_CATEGORIES = [...new Set(LIBRARY.map((i) => i.category))]

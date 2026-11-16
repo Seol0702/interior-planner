@@ -1,15 +1,19 @@
 // 프로젝트 저장·불러오기 (JSON 파일 + 브라우저 자동 저장)
-import type { Finish, FurnitureInstance, PatternId, Project, RoomShape } from './types'
+import type { Finish, FurnitureInstance, Note, PatternId, Project, RoomShape, Side, WallItem, Wire } from './types'
 import { findLibraryItem } from './library'
 import { ALL_PATTERNS, DEFAULT_FLOOR, DEFAULT_WALL } from './finishes'
 import { isHex } from './colors'
 import { newId } from './plan'
 
 export const DEFAULT_PROJECT: Project = {
-  version: 2,
+  version: 3,
   wallHeight: 2400,
+  north: 0,
   rooms: [{ id: 'room-1', name: '거실', x: 0, y: 0, width: 4000, depth: 3500, wall: DEFAULT_WALL, floor: DEFAULT_FLOOR }],
+  wallItems: [],
   furniture: [],
+  wires: [],
+  notes: [],
 }
 
 const STORAGE_KEY = 'interior-planner:project'
@@ -68,19 +72,19 @@ export function parseProject(text: string): Project {
       throw new Error('방 크기 정보가 잘못됐어요')
     }
     return {
-      version: 2,
+      ...DEFAULT_PROJECT,
       wallHeight: room.height,
       rooms: [{ ...DEFAULT_PROJECT.rooms[0], width: room.width, depth: room.depth }],
       furniture: parseFurniture(data.furniture),
     }
   }
 
-  if (data.version !== 2) throw new Error('이 프로그램의 저장 파일이 아니에요')
+  if (data.version !== 2 && data.version !== 3) throw new Error('이 프로그램의 저장 파일이 아니에요')
   if (!Array.isArray(data.rooms)) throw new Error('방 정보가 잘못됐어요')
   const rooms: RoomShape[] = []
   for (const r of data.rooms) {
     if (!isObject(r) || !isNum(r.x) || !isNum(r.y) || !validSize(r.width) || !validSize(r.depth)) continue
-    rooms.push({
+    const room: RoomShape = {
       id: typeof r.id === 'string' ? r.id : newId(),
       name: typeof r.name === 'string' && r.name.trim() ? r.name.slice(0, 20) : `방 ${rooms.length + 1}`,
       x: r.x,
@@ -89,14 +93,59 @@ export function parseProject(text: string): Project {
       depth: r.depth,
       wall: parseFinish(r.wall, DEFAULT_WALL),
       floor: parseFinish(r.floor, DEFAULT_FLOOR),
-    })
+    }
+    // 버전 2에서는 붙어 있는 방이 항상 벽 없이 이어졌다 → 그 모양을 그대로 유지
+    if (data.version === 2 ? data.rooms.length > 1 : r.open === true) room.open = true
+    rooms.push(room)
   }
   if (rooms.length === 0) throw new Error('방 정보가 잘못됐어요')
+  const roomIds = new Set(rooms.map((r) => r.id))
+
+  // 문·창문·콘센트
+  const wallItems: WallItem[] = []
+  for (const w of Array.isArray(data.wallItems) ? data.wallItems : []) {
+    if (!isObject(w) || !['door', 'window', 'outlet'].includes(w.kind as string) || !['N', 'E', 'S', 'W'].includes(w.side as string)) continue
+    if (typeof w.roomId !== 'string' || !roomIds.has(w.roomId) || !isNum(w.offset) || !isNum(w.width) || !isNum(w.height) || !isNum(w.sill)) continue
+    if (w.width < 50 || w.width > 10000 || w.height < 50 || w.height > 6000 || w.sill < 0 || w.sill > 6000) continue
+    const item: WallItem = {
+      id: typeof w.id === 'string' ? w.id : newId(),
+      kind: w.kind as WallItem['kind'],
+      roomId: w.roomId,
+      side: w.side as Side,
+      offset: w.offset,
+      width: w.width,
+      height: w.height,
+      sill: w.sill,
+    }
+    if (w.flip === true) item.flip = true
+    if (w.outward === true) item.outward = true
+    wallItems.push(item)
+  }
+
+  // 전선
+  const wires: Wire[] = []
+  for (const w of Array.isArray(data.wires) ? data.wires : []) {
+    if (!isObject(w) || !Array.isArray(w.points)) continue
+    const points = w.points.filter((p): p is { x: number; y: number } => isObject(p) && isNum(p.x) && isNum(p.y)).map((p) => ({ x: p.x, y: p.y }))
+    if (points.length >= 2) wires.push({ id: typeof w.id === 'string' ? w.id : newId(), points })
+  }
+
+  // 메모
+  const notes: Note[] = []
+  for (const n of Array.isArray(data.notes) ? data.notes : []) {
+    if (!isObject(n) || !isNum(n.x) || !isNum(n.y) || typeof n.text !== 'string') continue
+    notes.push({ id: typeof n.id === 'string' ? n.id : newId(), x: n.x, y: n.y, text: n.text.slice(0, 500) })
+  }
+
   return {
-    version: 2,
+    version: 3,
     wallHeight: isNum(data.wallHeight) && data.wallHeight >= 1500 && data.wallHeight <= 6000 ? data.wallHeight : 2400,
+    north: isNum(data.north) ? ((Math.round(data.north / 90) * 90) % 360 + 360) % 360 : 0,
     rooms,
+    wallItems,
     furniture: parseFurniture(data.furniture),
+    wires,
+    notes,
   }
 }
 

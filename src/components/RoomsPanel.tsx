@@ -66,6 +66,10 @@ export default function RoomsPanel(props: Props) {
                     <NumberField label="가로" value={room.width} {...ROOM} onCommit={(width) => onChange(room.id, { width })} />
                     <NumberField label="세로" value={room.depth} {...ROOM} onCommit={(depth) => onChange(room.id, { depth })} />
                   </div>
+                  <label className="check">
+                    <input type="checkbox" checked={room.open === true} onChange={(e) => onChange(room.id, { open: e.target.checked })} />
+                    옆방과 벽 없이 잇기 (ㄱ자 방 만들 때)
+                  </label>
                   <p className="hint">
                     {area.toFixed(2)}㎡ · 위치는 2D 평면도에서 끌어서 옮겨요
                   </p>

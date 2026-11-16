@@ -1,23 +1,51 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
-import type { Finish, RoomShape, Selection } from '../types'
-import { wallPieces, type WallPiece } from '../plan'
+import type { Finish, RoomShape, Selection, WallItem } from '../types'
+import { WALL_THICKNESS, findPiece, wallItemSpan, type Span, type WallPiece } from '../plan'
+import { buildWallGeometry, type Hole } from '../wallgeo'
 import { patternCanvas } from '../finishes'
 import { mm } from '../units'
 
 type Props = {
   rooms: RoomShape[]
+  pieces: WallPiece[]
+  wallItems: WallItem[]
   wallHeight: number
   selection: Selection
-  onSelectRoom: (id: string) => void
+  showWalls: boolean // 벽·문·창문 보이기
+  showElectric: boolean // 콘센트 보이기
+  shadows: boolean // 햇빛 효과가 켜져 있는가
+  onFloorClick: (roomId: string, x: number, y: number) => void
+  onSelect: (selection: Selection) => void
 }
 
-/** 평면도(방들)를 3D로: 방마다 바닥 + 바깥 테두리 벽 */
-export default function Plan3D({ rooms, wallHeight, selection, onSelectRoom }: Props) {
-  const pieces = useMemo(() => wallPieces(rooms), [rooms])
+type Attached = { item: WallItem; span: Span; piece: WallPiece }
+
+// 화면에는 안 보이지만 그림자는 만드는 재질 (천장, 숨겨진 벽이 햇빛을 막도록)
+const SHADOW_ONLY = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false })
+
+/** 평면도(방들)를 3D로: 바닥 + 벽 + 문·창문·콘센트 */
+export default function Plan3D(props: Props) {
+  const { rooms, pieces, wallItems, wallHeight, selection, showWalls, showElectric, shadows, onFloorClick, onSelect } = props
   const roomById = useMemo(() => new Map(rooms.map((r) => [r.id, r])), [rooms])
+
+  // 문·창문·콘센트가 각각 어느 벽 조각에 붙어 있는지 찾는다
+  const attached = useMemo(() => {
+    const list: Attached[] = []
+    for (const item of wallItems) {
+      const room = roomById.get(item.roomId)
+      if (!room) continue
+      const span = wallItemSpan(item, room)
+      const piece = findPiece(pieces, span)
+      if (piece) list.push({ item, span, piece })
+    }
+    return list
+  }, [wallItems, pieces, roomById])
+
+  const T = mm(WALL_THICKNESS)
+  const H = mm(wallHeight)
 
   return (
     <group>
@@ -27,12 +55,47 @@ export default function Plan3D({ rooms, wallHeight, selection, onSelectRoom }: P
           room={room}
           lift={i * 0.0005} // 겹친 방의 바닥이 깜빡이지 않게 아주 조금씩 높이 차이를 둔다
           selected={selection?.type === 'room' && selection.id === room.id}
-          onSelect={() => onSelectRoom(room.id)}
+          onClick={(x, y) => onFloorClick(room.id, x, y)}
         />
       ))}
-      {pieces.map((piece) => (
-        <Wall key={piece.key} piece={piece} height={wallHeight} finish={roomById.get(piece.roomId)!.wall} />
-      ))}
+
+      {showWalls &&
+        pieces.map((piece) => (
+          <Wall
+            key={piece.key}
+            piece={piece}
+            height={wallHeight}
+            finish={roomById.get(piece.roomId)!.wall}
+            otherFinish={piece.otherRoomId ? roomById.get(piece.otherRoomId)?.wall : undefined}
+            holes={attached.filter((a) => a.piece === piece && a.item.kind !== 'outlet')}
+            shadows={shadows}
+          />
+        ))}
+
+      {attached.map((a) =>
+        (a.item.kind === 'outlet' ? showElectric : showWalls) ? (
+          <WallItemMesh
+            key={a.item.id}
+            attached={a}
+            selected={selection?.type === 'wallItem' && selection.id === a.item.id}
+            onSelect={() => onSelect({ type: 'wallItem', id: a.item.id })}
+          />
+        ) : null,
+      )}
+
+      {/* 천장: 보이지 않지만 햇빛을 막는다 → 빛이 창문으로만 들어온다 */}
+      {shadows &&
+        showWalls &&
+        rooms.map((room) => (
+          <mesh
+            key={room.id}
+            castShadow
+            material={SHADOW_ONLY}
+            position={[mm(room.x + room.width / 2), H + 0.03, mm(room.y + room.depth / 2)]}
+          >
+            <boxGeometry args={[mm(room.width) + 2 * T, 0.05, mm(room.depth) + 2 * T]} />
+          </mesh>
+        ))}
     </group>
   )
 }
@@ -60,9 +123,9 @@ function useFinishTexture(finish: Finish, repeatX: number, repeatY: number, offs
   return texture
 }
 
-type FloorProps = { room: RoomShape; lift: number; selected: boolean; onSelect: () => void }
+type FloorProps = { room: RoomShape; lift: number; selected: boolean; onClick: (x: number, y: number) => void }
 
-function Floor({ room, lift, selected, onSelect }: FloorProps) {
+function Floor({ room, lift, selected, onClick }: FloorProps) {
   const W = mm(room.width)
   const D = mm(room.depth)
   const x = mm(room.x)
@@ -75,13 +138,14 @@ function Floor({ room, lift, selected, onSelect }: FloorProps) {
   return (
     <group>
       <mesh
+        receiveShadow
         rotation={[-Math.PI / 2, 0, 0]}
         position={[x + W / 2, lift, z + D / 2]}
         onClick={(e) => {
           // 화면을 끌다가 뗀 경우(delta가 큼)는 클릭으로 치지 않는다
           if (e.delta > 4) return
           e.stopPropagation()
-          onSelect()
+          onClick(e.point.x * 1000, e.point.z * 1000)
         }}
       >
         <planeGeometry args={[W, D]} />
@@ -98,17 +162,42 @@ function Floor({ room, lift, selected, onSelect }: FloorProps) {
   )
 }
 
-type WallProps = { piece: WallPiece; height: number; finish: Finish }
+type WallProps = { piece: WallPiece; height: number; finish: Finish; otherFinish?: Finish; holes: Attached[]; shadows: boolean }
 
 const WALL_TOP = '#deddd9' // 벽 윗면(잘린 단면) 색
 
-/** 벽 조각 하나. 카메라가 벽 바깥쪽에 있으면 숨겨서 방 안이 보이게 한다(컷어웨이) */
-function Wall({ piece, height, finish }: WallProps) {
+/**
+ * 벽 조각 하나 (문·창문 자리는 구멍이 뚫린다).
+ * 바깥벽은 카메라가 벽 바깥쪽에 있으면 숨겨서 방 안이 보이게 한다(컷어웨이).
+ */
+function Wall({ piece, height, finish, otherFinish, holes, shadows }: WallProps) {
   const ref = useRef<THREE.Mesh>(null)
   const H = mm(height)
+  const T = mm(WALL_THICKNESS)
   const { rect } = piece
-  const size = mm(finish.size)
-  const texture = useFinishTexture(finish, mm(piece.length) / size, H / size)
+
+  // 구멍 위치를 "벽 시작점부터의 거리(m)"로 바꾼다
+  const holeKey = holes.map((h) => `${h.span.a}:${h.span.b}:${h.item.sill}:${h.item.height}`).join('|')
+  const geometry = useMemo(() => {
+    const list: Hole[] = holes.map((h) => ({
+      a: mm(h.span.a - piece.from),
+      b: mm(h.span.b - piece.from),
+      bottom: mm(h.item.sill),
+      top: mm(h.item.sill + h.item.height),
+    }))
+    return buildWallGeometry(mm(piece.length), H, T, list)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piece.length, piece.from, H, T, holeKey])
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  // 벽의 앞면(+z)·뒷면(-z)이 각각 어느 방을 향하는지에 따라 벽지를 고른다.
+  // 세로 벽은 90° 돌려 세우므로 앞면이 서쪽을 향한다.
+  const far = otherFinish ?? finish
+  const front = piece.horizontal ? finish : far
+  const back = piece.horizontal ? far : finish
+  // 무늬 좌표가 m 단위라서 "1m에 무늬가 몇 번"만 정하면 된다
+  const frontTexture = useFinishTexture(front, 1 / mm(front.size), 1 / mm(front.size))
+  const backTexture = useFinishTexture(back, 1 / mm(back.size), 1 / mm(back.size))
 
   const center = useMemo(
     () => new THREE.Vector3(mm(rect.x + rect.w / 2), H / 2, mm(rect.y + rect.d / 2)),
@@ -119,30 +208,121 @@ function Wall({ piece, height, finish }: WallProps) {
 
   // useFrame: 화면을 다시 그릴 때마다(초당 약 60번) 실행
   useFrame(({ camera }) => {
-    if (!ref.current) return
+    if (!ref.current || piece.interior) return
     toCamera.subVectors(camera.position, center)
     ref.current.visible = toCamera.dot(outward) < 0
   })
 
-  // 박스의 6개 면: 0,1 = 좌우(±x) / 2,3 = 위아래 / 4,5 = 앞뒤(±z)
-  // 벽지는 벽의 넓은 면에만 입힌다. 가로 벽은 앞뒤 면, 세로 벽은 좌우 면이 넓은 면
-  const wide = piece.horizontal ? [4, 5] : [0, 1]
+  // 벽 모양은 "x = 길이 방향"으로 만들었으므로, 세로 벽은 돌려서 세운다
+  const position: [number, number, number] = piece.horizontal
+    ? [mm(piece.from), 0, mm(rect.y + rect.d / 2)]
+    : [mm(rect.x + rect.w / 2), 0, mm(piece.from)]
+  const rotation: [number, number, number] = piece.horizontal ? [0, 0, 0] : [0, -Math.PI / 2, 0]
+
   return (
-    <mesh ref={ref} position={center}>
-      <boxGeometry args={[mm(rect.w), H, mm(rect.d)]} />
-      {[0, 1, 2, 3, 4, 5].map((face) =>
-        wide.includes(face) ? (
-          <meshStandardMaterial
-            key={`${face}-${texture ? 'pattern' : 'solid'}`}
-            attach={`material-${face}`}
-            color={texture ? '#ffffff' : finish.color}
-            map={texture}
-            roughness={0.95}
-          />
-        ) : (
-          <meshStandardMaterial key={face} attach={`material-${face}`} color={face === 2 ? WALL_TOP : finish.color} roughness={0.95} />
-        ),
+    <group position={position} rotation={rotation}>
+      <mesh ref={ref} geometry={geometry} receiveShadow>
+        <meshStandardMaterial key={`f-${frontTexture ? 'p' : 's'}`} attach="material-0" color={frontTexture ? '#ffffff' : front.color} map={frontTexture} roughness={0.95} />
+        <meshStandardMaterial key={`b-${backTexture ? 'p' : 's'}`} attach="material-1" color={backTexture ? '#ffffff' : back.color} map={backTexture} roughness={0.95} />
+        <meshStandardMaterial attach="material-2" color={WALL_TOP} roughness={0.95} />
+        <meshStandardMaterial attach="material-3" color={finish.color} roughness={0.95} />
+      </mesh>
+      {/* 컷어웨이로 숨겨진 벽도 햇빛은 막아야 하므로, 그림자 전용 벽을 하나 더 둔다 */}
+      {shadows && <mesh geometry={geometry} material={SHADOW_ONLY} castShadow />}
+    </group>
+  )
+}
+
+const FRAME = '#f1f0ec'
+const DOOR = '#c9a37a'
+
+type WallItemMeshProps = { attached: Attached; selected: boolean; onSelect: () => void }
+
+/** 문·창문·콘센트의 3D 모양 */
+function WallItemMesh({ attached, selected, onSelect }: WallItemMeshProps) {
+  const { item, span, piece } = attached
+  const T = mm(WALL_THICKNESS)
+  const w = mm(item.width)
+  const h = mm(item.height)
+  const sill = mm(item.sill)
+  const f = 0.05 // 틀 두께
+
+  // 벽 두께의 가운데에, 벽 방향에 맞춰 놓는다 (x = 벽 길이 방향)
+  const across = piece.horizontal ? piece.rect.y + piece.rect.d / 2 : piece.rect.x + piece.rect.w / 2
+  const along = (span.a + span.b) / 2
+  const position: [number, number, number] = piece.horizontal ? [mm(along), 0, mm(across)] : [mm(across), 0, mm(along)]
+  const rotation: [number, number, number] = piece.horizontal ? [0, 0, 0] : [0, -Math.PI / 2, 0]
+  // 이 물건이 속한 방 안쪽이 z의 어느 쪽인지 (콘센트·문짝을 방 안쪽 면에 붙이기 위해)
+  const inward = piece.horizontal ? -span.ny : span.nx
+
+  const outline = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(w + 0.06, h + 0.06, T + 0.08)), [w, h, T])
+
+  // 문·창문은 붙어 있는 바깥벽이 컷어웨이로 숨겨질 때 함께 숨긴다 (콘센트는 위치 확인용으로 남긴다)
+  const ref = useRef<THREE.Group>(null)
+  const center = useMemo(() => new THREE.Vector3(position[0], 0, position[2]), [position[0], position[2]]) // eslint-disable-line react-hooks/exhaustive-deps
+  const toCamera = useMemo(() => new THREE.Vector3(), [])
+  useFrame(({ camera }) => {
+    if (!ref.current || piece.interior || item.kind === 'outlet') return
+    toCamera.subVectors(camera.position, center)
+    ref.current.visible = toCamera.x * piece.nx + toCamera.z * piece.ny < 0
+  })
+  const click = (e: ThreeEvent<MouseEvent>) => {
+    if (e.delta > 4) return
+    e.stopPropagation()
+    onSelect()
+  }
+
+  return (
+    <group ref={ref} position={position} rotation={rotation} onClick={click}>
+      {item.kind === 'window' && (
+        <group position={[0, sill + h / 2, 0]}>
+          {/* 창틀 4개 + 가운데 살 + 유리 */}
+          <mesh position={[0, h / 2 - f / 2, 0]}><boxGeometry args={[w, f, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
+          <mesh position={[0, -h / 2 + f / 2, 0]}><boxGeometry args={[w, f, T + 0.04]} /><meshStandardMaterial color={FRAME} /></mesh>
+          <mesh position={[-w / 2 + f / 2, 0, 0]}><boxGeometry args={[f, h, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
+          <mesh position={[w / 2 - f / 2, 0, 0]}><boxGeometry args={[f, h, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
+          {item.width > 1100 && <mesh><boxGeometry args={[f * 0.8, h, 0.04]} /><meshStandardMaterial color={FRAME} /></mesh>}
+          <mesh>
+            <boxGeometry args={[w - f, h - f, 0.012]} />
+            <meshStandardMaterial color="#a9d3ee" transparent opacity={0.28} roughness={0.1} />
+          </mesh>
+        </group>
       )}
-    </mesh>
+
+      {item.kind === 'door' && (
+        <group position={[0, h / 2, 0]}>
+          <mesh position={[0, h / 2 - f / 2, 0]}><boxGeometry args={[w, f, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
+          <mesh position={[-w / 2 + f / 2, 0, 0]}><boxGeometry args={[f, h, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
+          <mesh position={[w / 2 - f / 2, 0, 0]}><boxGeometry args={[f, h, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
+          {/* 문짝 (닫힌 모습) + 손잡이 */}
+          <mesh castShadow position={[0, -f / 2, 0]}>
+            <boxGeometry args={[w - 2 * f, h - f, 0.04]} />
+            <meshStandardMaterial color={DOOR} roughness={0.7} />
+          </mesh>
+          <mesh position={[(item.flip ? -1 : 1) * (w / 2 - f - 0.09), -h / 2 + 1.0, 0]}>
+            <boxGeometry args={[0.12, 0.03, 0.12]} />
+            <meshStandardMaterial color="#8f8f94" />
+          </mesh>
+        </group>
+      )}
+
+      {item.kind === 'outlet' && (
+        <group position={[0, sill + h / 2, inward * (T / 2 + 0.006)]}>
+          <mesh><boxGeometry args={[w, h, 0.012]} /><meshStandardMaterial color="#fafafa" /></mesh>
+          {[-1, 1].map((s) => (
+            <mesh key={s} position={[0, s * h * 0.22, inward * 0.007]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[w * 0.28, w * 0.28, 0.004, 20]} />
+              <meshStandardMaterial color="#52525b" />
+            </mesh>
+          ))}
+        </group>
+      )}
+
+      {selected && (
+        <lineSegments geometry={outline} position={[0, sill + h / 2, item.kind === 'outlet' ? inward * (T / 2) : 0]}>
+          <lineBasicMaterial color="#2563eb" />
+        </lineSegments>
+      )}
+    </group>
   )
 }

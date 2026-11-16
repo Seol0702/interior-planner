@@ -8,6 +8,7 @@ import { shade } from './colors'
 export type Tone =
   | 'main' // 본체 색
   | 'accent' // 포인트 색
+  | 'glow' // 조명의 빛나는 부분 (포인트 색, 켜지면 빛남)
   | 'dark' // 본체보다 어두운 색 (다리 등)
   | 'metal'
   | 'screen'
@@ -205,8 +206,19 @@ const builders: Record<ShapeId, Builder> = {
   lamp: (W, _D, H) => [
     cyl('dark', 0, 15, 0, W * 0.65, 30),
     cyl('metal', 0, 30 + (H - 310) / 2, 0, 24, H - 310),
-    cyl('accent', 0, H - 140, 0, W, 280), // 갓
+    cyl('glow', 0, H - 140, 0, W, 280), // 갓
   ],
+
+  // 천장등: 부품 좌표는 0~H이고, 그릴 때 천장 높이에 맞춰 올려 붙인다
+  ceilingLight: (W, _D, H) => [cyl('main', 0, H * 0.8, 0, W * 0.9, H * 0.4), cyl('glow', 0, H * 0.3, 0, W, H * 0.6)],
+
+  powerStrip: (W, D, H) => {
+    const n = Math.max(2, Math.floor((W - 60) / 55)) // 구멍 개수
+    const parts: Part[] = [box('main', 0, H / 2, 0, W, H, D)]
+    for (let i = 0; i < n; i++) parts.push(cyl('dark', -W / 2 + 70 + i * 55, H + 1, 0, 34, 3))
+    parts.push(box('accent', -W / 2 + 22, H + 3, 0, 20, 8, 28)) // 스위치
+    return parts
+  },
 
   plant: (W, _D, H) => {
     const ph = H * 0.28 // 화분 높이
@@ -267,7 +279,8 @@ export const buildParts = (shape: ShapeId, W: number, D: number, H: number): Par
 export function toneColor(tone: Tone, main: string, accent: string): string {
   switch (tone) {
     case 'main': return main
-    case 'accent': return accent
+    case 'accent':
+    case 'glow': return accent
     case 'dark': return shade(main, -0.4)
     case 'metal': return '#a1a1aa'
     case 'screen': return '#1f2125'
