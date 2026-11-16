@@ -91,6 +91,15 @@ export type ShapeId =
   | 'puck'
   | 'pendant'
   | 'catTower'
+  | 'coatStand'
+  | 'ladderShelf'
+  | 'bunkBed'
+  | 'sinkCounter'
+  | 'bathtub'
+  | 'toilet'
+  | 'washbasin'
+  | 'crib'
+  | 'treadmill'
 
 /** 가구 라이브러리에 들어있는 "부품" (KiCad의 심볼+풋프린트 같은 것) */
 export type FurnitureLibraryItem = {
@@ -117,6 +126,9 @@ export type FurnitureInstance = {
   rotation: number // 회전 각도 (0, 90, 180, 270)
   color?: string // 색을 바꿨을 때만 저장
   accent?: string
+  width?: number // 크기를 바꿨을 때만 저장 (mm)
+  depth?: number
+  height?: number
 }
 
 /** 저장 파일(JSON) 한 개에 들어가는 전체 내용 */

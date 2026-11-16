@@ -479,6 +479,107 @@ const builders: Record<ShapeId, Builder> = {
     box('main', W * 0.2, 60 + 150, 0, W * 0.5, 300, D * 0.7), // 숨숨집
     cyl('dark', W * 0.2, 60 + 140, D * 0.35 + 3, 150, 6, 'z'),
   ],
+
+  // 스탠드 옷걸이: 받침 + 기둥 + 고리 + 걸린 목도리
+  coatStand: (W, _D, H) => [
+    cyl('dark', 0, 15, 0, W * 0.7, 30),
+    cyl('main', 0, H / 2, 0, 40, H),
+    ...[0, 1, 2, 3].map((i) => ball('main', Math.sin((i * Math.PI) / 2) * 110, H - 120, Math.cos((i * Math.PI) / 2) * 110, 50)),
+    box('accent', 120, H - 420, 0, 50, 560, 200),
+  ],
+
+  // 사다리 선반: 뒤쪽 기둥 2개 + 아래로 갈수록 깊어지는 선반 + 소품
+  ladderShelf: (W, D, H) => {
+    const parts: Part[] = [box('main', -W / 2 + 20, H / 2, -D / 2 + 20, 40, H, 40), box('main', W / 2 - 20, H / 2, -D / 2 + 20, 40, H, 40)]
+    const n = 4
+    for (let i = 0; i < n; i++) {
+      const d = D * (0.45 + (0.55 * (n - 1 - i)) / (n - 1)) // 맨 아래가 가장 깊다
+      const y = 120 + ((H - 300) * i) / (n - 1)
+      parts.push(box('main', 0, y, -D / 2 + d / 2, W - 80, 24, d))
+      parts.push(box(i % 2 ? 'book2' : 'accent', -W * 0.15, y + 110, -D / 2 + d * 0.45, W * 0.35, 200, d * 0.6))
+    }
+    return parts
+  },
+
+  // 2층 침대: 기둥 4개 + 아래·위 침대 + 위쪽 난간 + 사다리
+  bunkBed: (W, D, H) => {
+    const lower = 250
+    const upper = H * 0.6
+    const parts: Part[] = [...legs('main', W / 2 - 35, D / 2 - 35, H, 70)]
+    for (const y of [lower, upper]) {
+      parts.push(box('main', 0, y, 0, W, 140, D))
+      parts.push(box('white', 0, y + 160, 0, W - 90, 180, D - 90))
+      parts.push(box('accent', 0, y + 260, D * 0.15, W - 70, 24, D * 0.6))
+      parts.push(box('white', 0, y + 300, -D / 2 + 260, W * 0.6, 90, 340))
+    }
+    parts.push(box('main', -W / 2 + 20, upper + 380, 0, 40, 160, D - 70)) // 난간
+    parts.push(box('main', W / 2 - 20, upper + 380, -D * 0.15, 40, 160, D * 0.6))
+    for (let i = 1; i <= 4; i++) parts.push(box('main', W / 2 - 20, lower + ((upper - lower + 200) * i) / 5, D / 2 - 330, 40, 30, 400)) // 사다리 발판
+    return parts
+  },
+
+  // 싱크대: 수납장 + 상판 + 개수대 + 수전 + 쿡탑
+  sinkCounter: (W, D, H) => [
+    ...builders.counter(W, D, H),
+    box('metal', -W / 4, H + 2, 10, Math.min(700, W * 0.35), 6, D * 0.62),
+    box('dark', -W / 4, H + 4, 10, Math.min(620, W * 0.3), 6, D * 0.52),
+    cyl('metal', -W / 4, H + 140, -D / 2 + 80, 30, 280),
+    box('metal', -W / 4, H + 270, -D / 2 + 160, 30, 30, 170),
+    box('screen', W / 4, H + 4, 10, Math.min(600, W * 0.3), 6, D * 0.75),
+  ],
+
+  // 욕조: 바깥 몸통 + 물 + 수전
+  bathtub: (W, D, H) => [
+    box('white', 0, H / 2, 0, W, H, D),
+    box('accent', 0, H - 50, 0, W - 160, 20, D - 160),
+    cyl('metal', -W / 2 + 60, H + 90, 0, 30, 180),
+    box('metal', -W / 2 + 120, H + 170, 0, 140, 30, 30),
+  ],
+
+  // 변기: 물탱크 + 받침 + 둥근 몸통 + 시트
+  toilet: (W, D, H) => [
+    box('white', 0, H - 200, -D / 2 + 100, W * 0.9, 400, 200),
+    cyl('white', 0, 100, D * 0.05, W * 0.5, 200),
+    blob('white', 0, 260, D * 0.1, W, 300, D * 0.68),
+    blob('accent', 0, 410, D * 0.1, W * 0.96, 30, D * 0.64),
+  ],
+
+  // 세면대: 하부장 + 세면볼 + 수전
+  washbasin: (W, D, H) => [
+    box('main', 0, (H - 150) / 2, -10, W, H - 150, D - 20),
+    box('accent', 0, (H - 150) / 2, D / 2 - 25, W - 30, H - 190, 10),
+    box('white', 0, H - 75, 0, W, 150, D),
+    blob('dark', 0, H - 10, 20, W * 0.6, 30, D * 0.55),
+    cyl('metal', 0, H + 100, -D / 2 + 60, 30, 200),
+    box('metal', 0, H + 190, -D / 2 + 120, 30, 30, 120),
+  ],
+
+  // 아기 침대: 기둥 + 매트리스 + 양옆 살 + 앞뒤 판
+  crib: (W, D, H) => {
+    const base = 320
+    const parts: Part[] = [
+      ...legs('main', W / 2 - 25, D / 2 - 25, H, 50),
+      box('main', 0, base, 0, W, 60, D),
+      box('white', 0, base + 90, 0, W - 60, 120, D - 60),
+      box('main', 0, base + (H - base) / 2, -D / 2 + 15, W, H - base, 30),
+      box('main', 0, base + (H - base) / 2, D / 2 - 15, W, H - base, 30),
+    ]
+    for (const s of [-1, 1]) {
+      parts.push(box('main', s * (W / 2 - 20), H - 20, 0, 40, 40, D))
+      for (let z = -D / 2 + 110; z < D / 2 - 80; z += 110) parts.push(cyl('main', s * (W / 2 - 20), base + (H - 40 - base) / 2, z, 24, H - 40 - base))
+    }
+    return parts
+  },
+
+  // 러닝머신: 발판 + 벨트 + 양쪽 기둥 + 계기판
+  treadmill: (W, D, H) => [
+    box('dark', 0, 90, 0, W * 0.85, 180, D),
+    box('screen', 0, 184, D * 0.05, W * 0.6, 8, D * 0.82),
+    box('main', -W / 2 + 30, 180 + (H - 180) / 2, -D / 2 + 150, 60, H - 180, 60),
+    box('main', W / 2 - 30, 180 + (H - 180) / 2, -D / 2 + 150, 60, H - 180, 60),
+    box('main', 0, H - 100, -D / 2 + 180, W, 200, 260),
+    box('accent', 0, H - 60, -D / 2 + 300, W * 0.4, 110, 10),
+  ],
 }
 
 /** 모양 + 치수 → 부품 목록 */

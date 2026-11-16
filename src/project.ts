@@ -45,6 +45,10 @@ function parseFurniture(list: unknown): FurnitureInstance[] {
     const inst: FurnitureInstance = { id: typeof f.id === 'string' ? f.id : newId(), libraryId: f.libraryId, x: f.x, y: f.y, rotation }
     if (isHex(f.color)) inst.color = f.color
     if (isHex(f.accent)) inst.accent = f.accent
+    for (const key of ['width', 'depth', 'height'] as const) {
+      const v = f[key]
+      if (isNum(v) && v >= 10 && v <= 10000) inst[key] = Math.round(v)
+    }
     result.push(inst)
   }
   return result

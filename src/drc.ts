@@ -1,7 +1,7 @@
 // 배치 규칙 검사 (KiCad의 DRC를 인테리어에 응용)
 // 프로젝트를 훑어보고 "문제가 될 만한 배치"를 목록으로 돌려준다.
 import type { FurnitureInstance, FurnitureLibraryItem, Project, Selection, WallItem } from './types'
-import { findLibraryItem, isPassable } from './library'
+import { isPassable, resolveItem } from './library'
 import { findPiece, footprint, wallItemSpan, type Rect, type Span, type WallPiece } from './plan'
 
 export type Issue = {
@@ -71,7 +71,7 @@ export function runChecks(project: Project, pieces: WallPiece[]): Issue[] {
   const issues: Issue[] = []
   const placed: Placed[] = []
   for (const f of project.furniture) {
-    const item = findLibraryItem(f.libraryId)
+    const item = resolveItem(f)
     if (!item) continue
     const { w, d } = footprint(item, f.rotation)
     placed.push({ f, item, rect: { x: f.x - w / 2, y: f.y - d / 2, w, d } })
@@ -97,7 +97,7 @@ export function runChecks(project: Project, pieces: WallPiece[]): Issue[] {
   }
 
   // 2) 좁은 틈: 덩치 큰 가구 사이가 어중간하게 떨어져 통로로 쓰기 좁은 경우
-  const small = ['chair', 'officeChair', 'stool', 'lamp', 'plant', 'beanbag', 'fan', 'tower', 'mirror']
+  const small = ['chair', 'officeChair', 'stool', 'lamp', 'plant', 'beanbag', 'fan', 'tower', 'mirror', 'coatStand', 'toilet']
   const bulky = solid.filter((p) => !small.includes(p.item.shape))
   for (let i = 0; i < bulky.length; i++) {
     for (let j = i + 1; j < bulky.length; j++) {

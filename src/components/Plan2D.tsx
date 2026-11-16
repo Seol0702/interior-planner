@@ -5,7 +5,7 @@ import type { Issue } from '../drc'
 import type { SunPatch } from '../sun'
 import type { Visible } from './Scene3D'
 import { WALL_THICKNESS, bounds, findPiece, footprint, wallItemSpan, type WallPiece } from '../plan'
-import { findLibraryItem } from '../library'
+import { resolveItem } from '../library'
 import { fmtM, toPyeong } from '../units'
 
 type DragType = 'room' | 'furniture' | 'wallItem' | 'note'
@@ -28,7 +28,7 @@ type Props = {
 }
 
 const MARGIN = 800 // 평면도 둘레 여백 (mm)
-const ROUND = ['roundTable', 'stool', 'lamp', 'plant', 'ceilingLight', 'pendant', 'beanbag', 'puck', 'fan']
+const ROUND = ['roundTable', 'stool', 'lamp', 'plant', 'ceilingLight', 'pendant', 'beanbag', 'puck', 'fan', 'coatStand']
 
 /** 위에서 내려다본 2D 평면도. 방·가구·문·창문·메모를 끌어서 옮길 수 있다 */
 export default function Plan2D(props: Props) {
@@ -153,7 +153,7 @@ export default function Plan2D(props: Props) {
 
       {/* 가구 */}
       {furniture.map((f) => {
-        const item = findLibraryItem(f.libraryId)
+        const item = resolveItem(f)
         if (!item || !(item.layer === 'electric' ? visible.electric : visible.furniture)) return null
         const selected = isSelected('furniture', f.id)
         const fp = footprint(item, f.rotation)

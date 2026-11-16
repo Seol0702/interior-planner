@@ -2,7 +2,9 @@ import { useRef } from 'react'
 import type { FurnitureInstance, FurnitureLibraryItem } from '../types'
 import { extractColors } from '../image'
 import { fmtCm } from '../units'
+import { findLibraryItem } from '../library'
 import Icon from '../icons'
+import NumberField from './NumberField'
 
 type Props = {
   instance: FurnitureInstance
@@ -13,11 +15,14 @@ type Props = {
   onDelete: () => void
   onClose: () => void
   onRecolor: (colors: { color?: string; accent?: string }) => void
+  onResize: (size: { width?: number; depth?: number; height?: number } | null) => void // null = 원래 크기
   onToast: (text: string, error?: boolean) => void
 }
 
 /** 선택한 가구의 속성 카드 */
-export default function SelectionPanel({ instance, item, thumb, onRotate, onDuplicate, onDelete, onClose, onRecolor, onToast }: Props) {
+export default function SelectionPanel({ instance, item, thumb, onRotate, onDuplicate, onDelete, onClose, onRecolor, onResize, onToast }: Props) {
+  const resized = instance.width !== undefined || instance.depth !== undefined || instance.height !== undefined
+  const base = findLibraryItem(instance.libraryId)
   const fileInput = useRef<HTMLInputElement>(null)
   const changed = instance.color !== undefined || instance.accent !== undefined
 
@@ -58,6 +63,20 @@ export default function SelectionPanel({ instance, item, thumb, onRotate, onDupl
         <dt>회전</dt>
         <dd>{instance.rotation}°</dd>
       </dl>
+
+      <div className="size-head">
+        <h3>크기</h3>
+        {resized && base && (
+          <button className="btn ghost sm" onClick={() => onResize(null)}>
+            원래 크기 ({base.width / 10}×{base.depth / 10}×{base.height / 10})
+          </button>
+        )}
+      </div>
+      <div className="fields three">
+        <NumberField label="폭" unit="cm" value={item.width} min={100} max={10000} onCommit={(width) => onResize({ width })} />
+        <NumberField label="깊이" unit="cm" value={item.depth} min={30} max={10000} onCommit={(depth) => onResize({ depth })} />
+        <NumberField label="높이" unit="cm" value={item.height} min={10} max={4000} onCommit={(height) => onResize({ height })} />
+      </div>
 
       <div className="fields two">
         <label className="field">

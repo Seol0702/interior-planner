@@ -4,7 +4,7 @@ import type {
   Finish, FurnitureInstance, LayerView, Lighting, Note, Point, Project, RoomShape, Selection, Tool, ViewMode, ViewName, WallItem,
 } from './types'
 import { DEFAULT_PROJECT, loadFromBrowser, saveToBrowser } from './project'
-import { LIBRARY, findLibraryItem } from './library'
+import { LIBRARY, findLibraryItem, resolveItem } from './library'
 import {
   bounds, clampWallItem, contains, edgeLength, footprint, nearestEdge, newId, placeInPlan, roomRect, unionArea, wallItemSpan, wallPieces,
 } from './plan'
@@ -37,7 +37,7 @@ import type { ViewRequest } from './components/CameraRig'
 const refit = (furniture: FurnitureInstance[], rooms: RoomShape[]) => {
   const pieces = wallPieces(rooms)
   return furniture.map((f) => {
-    const item = findLibraryItem(f.libraryId)
+    const item = resolveItem(f)
     return item ? placeInPlan(f, item, rooms, pieces) : f
   })
 }
@@ -51,7 +51,7 @@ const refitWallItems = (items: WallItem[], rooms: RoomShape[]) =>
 
 /** 가구가 바닥에서 차지하는 자리 (중심 + 크기) */
 const boxOf = (f: FurnitureInstance): Box | null => {
-  const item = findLibraryItem(f.libraryId)
+  const item = resolveItem(f)
   if (!item) return null
   const { w, d } = footprint(item, f.rotation)
   return { x: f.x, y: f.y, w, d }
@@ -110,7 +110,7 @@ export default function App() {
     selection?.type === type ? list.find((o) => o.id === selection.id) : undefined
   const selectedRoom = find('room', rooms)
   const selectedFurniture = find('furniture', furniture)
-  const selectedItem = selectedFurniture ? findLibraryItem(selectedFurniture.libraryId) : undefined
+  const selectedItem = selectedFurniture ? resolveItem(selectedFurniture) : undefined
   const selectedWallItem = find('wallItem', wallItems)
   const selectedWire = find('wire', wires)
   const selectedNote = find('note', notes)
@@ -286,8 +286,9 @@ export default function App() {
       ...p,
       furniture: p.furniture.map((f) => {
         if (f.id !== id) return f
-        const item = findLibraryItem(f.libraryId)
-        return item ? placeInPlan(change(f), item, p.rooms) : f
+        const next = change(f)
+        const item = resolveItem(next) // 크기가 바뀌었을 수 있으니 바뀐 뒤 모습으로
+        return item ? placeInPlan(next, item, p.rooms) : f
       }),
     })
   }
@@ -296,7 +297,7 @@ export default function App() {
   const moveFurniture = (id: string, wantX: number, wantY: number) => {
     const p = latest.current
     const f = p.furniture.find((o) => o.id === id)
-    const item = f && findLibraryItem(f.libraryId)
+    const item = f && resolveItem(f)
     if (!f || !item) return
     const { w, d } = footprint(item, f.rotation)
     const others = p.furniture.filter((o) => o.id !== id).map(boxOf).filter((b): b is Box => b !== null)
@@ -337,6 +338,20 @@ export default function App() {
       // "원래 색"으로 되돌릴 때는 항목 자체를 지운다
       if (next.color === undefined) delete next.color
       if (next.accent === undefined) delete next.accent
+      return next
+    })
+  }
+
+  /** 크기 바꾸기. 원래 크기와 같아지면 저장하지 않는다 (null이면 원래 크기로) */
+  const resizeSelected = (size: { width?: number; depth?: number; height?: number } | null) => {
+    if (!selectedFurniture) return
+    const base = findLibraryItem(selectedFurniture.libraryId)
+    if (!base) return
+    changeFurniture(selectedFurniture.id, (f) => {
+      const next = { ...f, ...(size ?? {}) }
+      for (const key of ['width', 'depth', 'height'] as const) {
+        if (size === null || next[key] === base[key]) delete next[key]
+      }
       return next
     })
   }
@@ -387,7 +402,7 @@ export default function App() {
       }
     }
     for (const f of p.furniture) {
-      const item = findLibraryItem(f.libraryId)
+      const item = resolveItem(f)
       if (item && (item.layer === 'electric' || item.light)) anchors.push({ x: f.x, y: f.y })
     }
     return anchors
@@ -698,6 +713,7 @@ export default function App() {
               onDelete={deleteSelected}
               onClose={deselect}
               onRecolor={recolorSelected}
+              onResize={resizeSelected}
               onToast={showToast}
             />
           )}

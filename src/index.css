@@ -366,6 +366,18 @@ textarea:focus-visible {
   grid-template-columns: 1fr 1fr;
 }
 
+.fields.three {
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+}
+
+.size-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 30px;
+}
+
 input[type='text'],
 input[type='number'],
 select,
@@ -1101,7 +1113,7 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: 262px;
+  width: 284px;
   max-height: calc(100% - 176px);
   padding: 14px;
   border: 1px solid var(--line);

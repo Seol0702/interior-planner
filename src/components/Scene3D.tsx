@@ -7,7 +7,7 @@ import type { Guide } from '../guides'
 import type { Issue } from '../drc'
 import type { Sun, SunPatch } from '../sun'
 import { bounds, type WallPiece } from '../plan'
-import { findLibraryItem } from '../library'
+import { resolveItem } from '../library'
 import { posePosition, viewPose } from '../camera'
 import { mm } from '../units'
 import Plan3D from './Plan3D'
@@ -78,7 +78,7 @@ export default function Scene3D(props: Props) {
     })
   }
   const picked = selection?.type === 'furniture' ? project.furniture.find((f) => f.id === selection.id) : undefined
-  const pickedItem = picked && findLibraryItem(picked.libraryId)
+  const pickedItem = picked && resolveItem(picked)
   if (picked && pickedItem) {
     const top = pickedItem.mount === 'ceiling' ? project.wallHeight : pickedItem.height
     anchors.push({ id: 'tag', pos: [mm(picked.x), mm(top) + 0.25, mm(picked.y)], node: <div className="tag">{pickedItem.name}</div> })
@@ -116,7 +116,7 @@ export default function Scene3D(props: Props) {
       />
 
       {project.furniture.map((f) => {
-        const item = findLibraryItem(f.libraryId)
+        const item = resolveItem(f)
         if (!item || !(item.layer === 'electric' ? visible.electric : visible.furniture)) return null
         return (
           <FurnitureMesh

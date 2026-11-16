@@ -1,4 +1,4 @@
-import type { FurnitureLibraryItem, ShapeId } from './types'
+import type { FurnitureInstance, FurnitureLibraryItem, ShapeId } from './types'
 
 const item = (
   id: string, name: string, category: string, shape: ShapeId,
@@ -92,6 +92,133 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   // ── 반려동물 ──
   item('cat-tower', '캣타워', '반려동물', 'catTower', 600, 500, 1500, '#e8dfd2', '#b8a07e'),
 
+
+  // ═════════ 추가 100종 ═════════
+
+  // ── 거실 ──
+  item('sofa-4', '4인 소파', '거실', 'sofa', 2400, 950, 820, '#8c96a3', '#b9c1cb'),
+  item('sofa-low', '로우 모듈 소파', '거실', 'sofa', 2700, 1000, 700, '#e3dccf', '#f1ece3'),
+  item('couch-large', '대형 카우치 소파', '거실', 'cornerSofa', 3000, 1700, 820, '#6f7a70', '#97a297'),
+  item('sofa-leather', '가죽 3인 소파', '거실', 'sofa', 2100, 920, 850, '#7a4f35', '#946247'),
+  item('sofa-bed', '소파베드', '거실', 'sofa', 1900, 950, 820, '#a4a9ae', '#c6cacd'),
+  item('sofa-boucle', '부클레 2인 소파', '거실', 'sofa', 1700, 900, 760, '#efebe3', '#f7f4ee'),
+  item('ottoman', '오토만 (발받침)', '거실', 'box', 600, 450, 420, '#b3a08b', '#b3a08b'),
+  item('pouf', '푸프', '거실', 'beanbag', 500, 500, 400, '#c97b5a', '#d99677'),
+  item('lounge-chair', '라운지 체어', '거실', 'recliner', 800, 850, 850, '#3f3a36', '#5a524c'),
+  item('armchair', '패브릭 암체어', '거실', 'sofa', 750, 800, 800, '#7a8b72', '#9aaa92'),
+  item('nesting-table', '네스팅 테이블', '거실', 'roundTable', 500, 500, 450, '#3f3f46', '#3f3f46'),
+  item('coffee-table-large', '대형 소파 테이블', '거실', 'table', 1200, 700, 380, '#7a5c40', '#7a5c40'),
+  item('low-table', '좌식 테이블', '거실', 'table', 1000, 600, 330, '#c9a67a', '#c9a67a'),
+  item('floor-cushion', '좌식 방석', '거실', 'beanbag', 600, 600, 150, '#d9cbb6', '#ebe1d1'),
+  item('tv-stand-long', '와이드 TV장 + TV', '거실', 'tvUnit', 2000, 400, 1300, '#f1efe9', '#f7f6f2'),
+  item('tv-75', '75인치 TV + 거실장', '거실', 'tvUnit', 2400, 450, 1500, '#5b4636', '#7a604b'),
+  item('display-cabinet', '유리 진열장', '거실', 'wardrobe', 800, 400, 1800, '#3f3f46', '#cfdfe8'),
+  item('rug-large', '대형 러그', '거실', 'rug', 2400, 1700, 12, '#bfb3a3', '#d9cfc1'),
+  item('rug-small', '소형 러그', '거실', 'rug', 1200, 800, 12, '#9fb3c8', '#c4d2e0'),
+  item('plant-small', '소형 화분', '거실', 'plant', 300, 300, 600, '#f1ede6', '#6f9a62'),
+  item('olive-tree', '올리브나무', '거실', 'plant', 600, 600, 1500, '#c4734f', '#8aa070'),
+  item('coat-stand', '스탠드 옷걸이', '거실', 'coatStand', 450, 450, 1750, '#a07c5a', '#c9b79f'),
+  item('ladder-shelf', '사다리 선반', '거실', 'ladderShelf', 600, 400, 1700, '#b08e68', '#d6c7b2'),
+
+  // ── 침실 ──
+  item('bed-queen-white', '화이트 퀸 침대', '침실', 'bed', 1600, 2100, 900, '#f1efe9', '#c9d3dc'),
+  item('bed-queen-low', '저상형 퀸 침대', '침실', 'bed', 1600, 2100, 550, '#d6c4a8', '#e5ded2'),
+  item('bed-ss-storage', '수납형 슈퍼싱글 침대', '침실', 'bed', 1100, 2100, 950, '#ece7df', '#a9b5c6'),
+  item('bunk-bed', '2층 침대', '침실', 'bunkBed', 1100, 2100, 1650, '#c9a67a', '#9db0a1'),
+  item('mattress-queen', '퀸 매트리스', '침실', 'mattress', 1500, 2000, 250, '#f5f3ee', '#e5e7eb'),
+  item('mattress-ss', '슈퍼싱글 매트리스', '침실', 'mattress', 1100, 2000, 250, '#f5f3ee', '#e5e7eb'),
+  item('nightstand-round', '원형 협탁', '침실', 'roundTable', 400, 400, 550, '#e9e4dc', '#e9e4dc'),
+  item('nightstand-2', '2단 협탁', '침실', 'drawers', 400, 350, 450, '#f4f4f2', '#e2ddd3'),
+  item('dresser-wide', '와이드 서랍장', '침실', 'drawers', 1200, 450, 800, '#b39b82', '#d9ccba'),
+  item('dresser-tall', '높은 서랍장', '침실', 'drawers', 800, 450, 1200, '#f1ede6', '#e2d6c6'),
+  item('wardrobe-2', '2문 옷장', '침실', 'wardrobe', 800, 580, 1900, '#e2d6c6', '#efe6d8'),
+  item('wardrobe-sliding', '슬라이딩 옷장', '침실', 'wardrobe', 1800, 620, 2100, '#8a7b6c', '#a39586'),
+  item('mirror-wide', '와이드 거울', '침실', 'mirror', 1000, 300, 1500, '#2f2f33', '#2f2f33'),
+  item('vanity-compact', '미니 화장대', '침실', 'vanity', 800, 400, 1350, '#e8dfd2', '#f1ede6'),
+  item('hanger-mini', '미니 행거', '침실', 'hanger', 800, 400, 1500, '#e4e4e7', '#d9cbb6'),
+
+  // ── 서재 ──
+  item('desk-compact', '컴팩트 책상', '서재', 'desk', 1000, 500, 740, '#f1efe9', '#e2ddd3'),
+  item('desk-wide', '와이드 책상', '서재', 'desk', 1600, 700, 740, '#7a5c40', '#a58a6d'),
+  item('desk-computer', '컴퓨터 책상', '서재', 'standingDesk', 1200, 600, 740, '#3f3f46', '#3f3f46'),
+  item('desk-study', '학생 책상', '서재', 'desk', 1200, 600, 740, '#e9e4dc', '#9fb3c8'),
+  item('chair-mesh', '메쉬 의자', '서재', 'officeChair', 620, 620, 1050, '#52525b', '#71717a'),
+  item('chair-study', '원목 공부 의자', '서재', 'chair', 450, 500, 820, '#b08e68', '#b08e68'),
+  item('bookshelf-wide', '와이드 책장', '서재', 'bookshelf', 1200, 300, 1800, '#f1efe9', '#f1efe9'),
+  item('bookshelf-low', '낮은 책장', '서재', 'bookshelf', 800, 300, 800, '#c9a67a', '#c9a67a'),
+  item('cube-shelf-1x4', '4칸 큐브 선반', '서재', 'cubeShelf', 390, 390, 1470, '#f4f4f2', '#c9b79f'),
+  item('cube-shelf-4x4', '큐브 선반 4×4', '서재', 'cubeShelf', 1470, 390, 1470, '#3f3f46', '#c9b79f'),
+  item('file-cabinet', '이동식 서랍', '서재', 'drawers', 400, 500, 600, '#e4e4e7', '#f4f4f5'),
+
+  // ── 주방 ──
+  item('dining-round-4', '4인 원형 식탁', '주방', 'roundTable', 1000, 1000, 740, '#c9a67a', '#c9a67a'),
+  item('dining-marble', '대리석 식탁', '주방', 'table', 1600, 850, 750, '#efede8', '#efede8'),
+  item('dining-ext', '확장형 식탁', '주방', 'table', 1600, 900, 750, '#9a7b5a', '#9a7b5a'),
+  item('chair-cushion', '쿠션 식탁 의자', '주방', 'chair', 460, 520, 820, '#3f3f46', '#c9bba8'),
+  item('chair-plastic', '플라스틱 의자', '주방', 'chair', 450, 500, 800, '#f4f4f2', '#f4f4f2'),
+  item('bench-cushion', '쿠션 벤치', '주방', 'table', 1300, 380, 450, '#a58a6d', '#d6c7b2'),
+  item('stool-wood', '원목 스툴', '주방', 'stool', 320, 320, 450, '#c9a67a', '#c9a67a'),
+  item('sink-counter', '싱크대', '주방', 'sinkCounter', 2400, 600, 850, '#f1efe9', '#d8d2c6'),
+  item('base-cabinet', '주방 하부장', '주방', 'counter', 1200, 600, 850, '#e8e4dc', '#cfc8bc'),
+  item('pantry', '키큰장 (팬트리)', '주방', 'wardrobe', 600, 600, 2100, '#f1efe9', '#f7f6f2'),
+  item('microwave-rack', '전자레인지 수납장', '주방', 'cubeShelf', 600, 400, 1200, '#f4f4f2', '#9fb3c8'),
+  item('fridge-4door', '4도어 냉장고', '주방', 'fridge', 920, 920, 1850, '#e9e4dc', '#f4f1ec'),
+  item('wine-fridge', '와인셀러', '주방', 'tower', 500, 550, 850, '#27272a', '#52525b'),
+
+  // ── 욕실 ──
+  item('bathtub', '욕조', '욕실', 'bathtub', 1500, 750, 550, '#f6f6f4', '#a9d3ee'),
+  item('toilet', '변기', '욕실', 'toilet', 400, 700, 750, '#f6f6f4', '#ececea'),
+  item('washbasin', '세면대', '욕실', 'washbasin', 600, 480, 850, '#c9a67a', '#ddc4a3'),
+  item('bath-cabinet', '욕실 수납장', '욕실', 'wardrobe', 400, 300, 1500, '#f4f4f2', '#f7f7f5'),
+  item('laundry-basket', '빨래 바구니', '욕실', 'puck', 400, 400, 550, '#d9c7ad', '#c4ae90'),
+
+  // ── 가전 ──
+  item('washer-top', '통돌이 세탁기', '가전', 'tower', 600, 620, 980, '#eceef0', '#cfd4da'),
+  item('air-purifier-large', '대형 공기청정기', '가전', 'tower', 450, 450, 900, '#e9e4dc', '#d6cfc3'),
+  item('dehumidifier', '제습기', '가전', 'tower', 400, 300, 650, '#f4f4f2', '#d4d4d8'),
+  item('humidifier', '가습기', '가전', 'puck', 300, 300, 400, '#f4f4f2', '#a9d3ee'),
+  item('circulator', '서큘레이터', '가전', 'fan', 300, 300, 500, '#f4f4f2', '#e4e4e7'),
+  item('aircon-2in1', '투인원 스탠드 에어컨', '가전', 'tower', 450, 450, 1850, '#e9e4dc', '#f4f1ec'),
+  item('styler-mini', '미니 의류관리기', '가전', 'wardrobe', 400, 550, 1200, '#cfc8bc', '#e2ddd3'),
+  item('vacuum-station', '무선청소기 거치대', '가전', 'tower', 300, 300, 1200, '#e4e4e7', '#71717a'),
+  item('speaker', '스탠드 스피커', '가전', 'tower', 250, 300, 1000, '#27272a', '#3f3f46'),
+  item('water-purifier', '스탠드 정수기', '가전', 'tower', 300, 400, 1300, '#f4f4f2', '#a9d3ee'),
+
+  // ── 수납 ──
+  item('storage-cabinet', '수납장', '수납', 'wardrobe', 800, 400, 1100, '#e8dfd2', '#f1ede6'),
+  item('open-shelf', '오픈 선반', '수납', 'bookshelf', 900, 350, 1200, '#3f3f46', '#3f3f46'),
+  item('shoe-cabinet-tall', '키큰 신발장', '수납', 'wardrobe', 900, 380, 2000, '#efe9df', '#f7f3ec'),
+  item('shoe-rack', '신발 선반', '수납', 'cubeShelf', 800, 300, 800, '#c9a67a', '#a58a6d'),
+  item('storage-box-large', '대형 수납함', '수납', 'box', 700, 450, 500, '#e4e4e7', '#e4e4e7'),
+  item('drawer-unit-3', '3단 수납함', '수납', 'drawers', 450, 400, 650, '#f4f4f2', '#e2ddd3'),
+  item('entry-bench', '현관 의자', '수납', 'table', 900, 350, 450, '#b08e68', '#b08e68'),
+
+  // ── 조명 ──
+  item('floor-lamp-arc', '아치형 플로어 램프', '조명', 'lamp', 400, 400, 1900, '#a1a1aa', '#f3e9d2', { light: true }),
+  item('floor-lamp-tripod', '삼각대 조명', '조명', 'lamp', 500, 500, 1500, '#a58a6d', '#f5ead6', { light: true }),
+  item('table-lamp-glass', '유리 무드등', '조명', 'lamp', 250, 250, 400, '#cfdfe8', '#fff4e0', { light: true }),
+  item('pendant-large', '대형 펜던트 조명', '조명', 'pendant', 600, 600, 900, '#f4f4f2', '#fff1d6', { light: true, mount: 'ceiling' }),
+  item('pendant-mini', '미니 펜던트 조명', '조명', 'pendant', 250, 250, 700, '#b08e68', '#fff1d6', { light: true, mount: 'ceiling' }),
+  item('ceiling-light-large', '대형 천장등', '조명', 'ceilingLight', 700, 700, 100, '#e7e5e4', '#fff7e6', { light: true, mount: 'ceiling' }),
+
+  // ── 아이방 ──
+  item('crib', '아기 침대', '아이방', 'crib', 700, 1300, 950, '#f1efe9', '#f6e3d8'),
+  item('kids-desk', '어린이 책상', '아이방', 'desk', 1000, 550, 600, '#f4f4f2', '#a9d3ee'),
+  item('kids-chair', '어린이 의자', '아이방', 'chair', 350, 380, 600, '#f2c94c', '#f2c94c'),
+  item('toy-shelf', '장난감 정리함', '아이방', 'cubeShelf', 1000, 350, 750, '#f4f4f2', '#f2b8a2'),
+  item('kids-bed', '어린이 침대', '아이방', 'bed', 1000, 1800, 700, '#f1efe9', '#bfd8c2'),
+  item('play-mat', '놀이 매트', '아이방', 'rug', 2000, 1400, 12, '#d9e8f2', '#f6e3d8'),
+
+  // ── 운동 ──
+  item('treadmill', '러닝머신', '운동', 'treadmill', 800, 1800, 1350, '#3f3f46', '#a1a1aa'),
+  item('yoga-mat', '요가 매트', '운동', 'rug', 610, 1830, 6, '#8fa3b5', '#a9b9c8'),
+  item('workout-bench', '운동 벤치', '운동', 'table', 1200, 350, 450, '#27272a', '#27272a'),
+
+  // ── 반려동물 ──
+  item('cat-tower-small', '소형 캣타워', '반려동물', 'catTower', 450, 400, 900, '#f1ede6', '#c9b79f'),
+  item('pet-bed', '강아지 방석', '반려동물', 'beanbag', 700, 550, 200, '#b39b82', '#e6dccb'),
+  item('pet-house', '반려동물 하우스', '반려동물', 'box', 600, 500, 550, '#e8dfd2', '#e8dfd2'),
+
   // ── 전기 ──
   item('power-strip', '멀티탭', '전기', 'powerStrip', 300, 60, 40, '#f4f4f5', '#dc2626', { layer: 'electric' }),
 ]
@@ -102,6 +229,16 @@ export const isPassable = (i: FurnitureLibraryItem) =>
 
 /** 가구 분류 목록 (라이브러리에 나온 순서대로) */
 export const FURNITURE_CATEGORIES = [...new Set(LIBRARY.map((i) => i.category))]
+
+/**
+ * 배치된 가구의 "실제 모습": 라이브러리 원본에 이 가구만의 크기 변경을 덮어쓴 것.
+ * (가구 하나의 크기를 바꿔도 라이브러리 원본은 그대로 둔다)
+ */
+export function resolveItem(f: FurnitureInstance): FurnitureLibraryItem | undefined {
+  const base = findLibraryItem(f.libraryId)
+  if (!base || (f.width === undefined && f.depth === undefined && f.height === undefined)) return base
+  return { ...base, width: f.width ?? base.width, depth: f.depth ?? base.depth, height: f.height ?? base.height }
+}
 
 /** id로 라이브러리 가구 찾기 */
 export const findLibraryItem = (id: string) => LIBRARY.find((i) => i.id === id)
