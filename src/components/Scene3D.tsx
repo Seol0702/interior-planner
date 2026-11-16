@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import type { Lighting, Point, Project, Selection, Tool } from '../types'
 import type { Guide } from '../guides'
 import type { Issue } from '../drc'
-import { daylight, sunDirection, type Sun, type SunPatch } from '../sun'
+import type { Sun, SunPatch } from '../sun'
 import { bounds, type WallPiece } from '../plan'
 import { findLibraryItem } from '../library'
 import { posePosition, viewPose } from '../camera'
@@ -35,6 +35,7 @@ type Props = {
   onSelect: (selection: Selection) => void
   onFloorClick: (roomId: string, x: number, y: number) => void
   onMoveFurniture: (id: string, x: number, y: number) => void
+  onMoveWallItem: (id: string, along: number, height: number) => void
   onDragEnd: () => void
 }
 
@@ -42,7 +43,7 @@ type Props = {
 export default function Scene3D(props: Props) {
   const { project, pieces, selection, guides, issues, visible, tool, draft, lighting, sun, patches, viewRequest, cameraRef } = props
   const compass = useRef<HTMLDivElement>(null)
-  const { onSelect, onFloorClick, onMoveFurniture, onDragEnd } = props
+  const { onSelect, onFloorClick, onMoveFurniture, onMoveWallItem, onDragEnd } = props
   // 처음 켰을 때의 카메라 자세 (한 번만 계산)
   const [pose] = useState(() => viewPose('iso', project.rooms))
   const lampsOn = lighting.enabled && lighting.lamps
@@ -95,7 +96,7 @@ export default function Scene3D(props: Props) {
       onPointerMissed={() => tool === 'select' && onSelect(null)}
     >
       <Lights project={project} lighting={lighting} sun={sun} />
-      {lighting.enabled && !lighting.night && <SunSky project={project} lighting={lighting} sun={sun} patches={patches} />}
+      {lighting.enabled && !lighting.night && <SunSky project={project} sun={sun} patches={patches} />}
       <CompassSync target={compass} north={project.north} />
 
       <Plan3D
@@ -107,6 +108,9 @@ export default function Scene3D(props: Props) {
         showWalls={visible.walls}
         showElectric={visible.electric}
         shadows={lighting.enabled}
+        interactive={tool === 'select'}
+        onMoveWallItem={onMoveWallItem}
+        onDragEnd={onDragEnd}
         onFloorClick={onFloorClick}
         onSelect={(s) => tool === 'select' && onSelect(s)}
       />
@@ -235,23 +239,12 @@ function CompassSync({ target, north }: { target: RefObject<HTMLDivElement | nul
 
 const BEAM = new THREE.MeshBasicMaterial({ color: '#fff0b3', transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide })
 
-/** 하늘의 해, 해가 하루 동안 지나가는 길, 창문으로 들어오는 빛줄기 */
-function SunSky({ project, lighting, sun, patches }: { project: Project; lighting: Lighting; sun: Sun; patches: SunPatch[] }) {
+/** 바깥 땅(집 그림자가 보이는 곳)과 창문으로 들어오는 빛줄기 */
+function SunSky({ project, sun, patches }: { project: Project; sun: Sun; patches: SunPatch[] }) {
   const b = useMemo(() => bounds(project.rooms), [project.rooms])
   const cx = mm(b.cx)
   const cz = mm(b.cy)
-  const radius = Math.max(mm(b.w), mm(b.d)) / 2 + 4.5 // 해를 그릴 거리
-
-  // 해 뜰 때부터 질 때까지의 길 (10분 간격으로 점을 찍어 잇는다)
-  const path = useMemo(() => {
-    const { sunrise, sunset } = daylight(lighting.season)
-    const points: [number, number, number][] = []
-    for (let t = sunrise; t <= sunset + 0.001; t += 1 / 6) {
-      const s = sunDirection(Math.min(t, sunset), lighting.season, project.north)
-      points.push([cx + s.x * radius, Math.max(0, s.y) * radius, cz + s.z * radius])
-    }
-    return points
-  }, [lighting.season, project.north, cx, cz, radius])
+  const radius = Math.max(mm(b.w), mm(b.d)) / 2 + 4.5 // 바깥 땅의 크기
 
   // 빛줄기: 창문 네 귀퉁이(near)와 빛이 닿는 네 점(far)을 이은 기둥
   const beams = useMemo(() => {
@@ -280,13 +273,6 @@ function SunSky({ project, lighting, sun, patches }: { project: Project; lightin
         <circleGeometry args={[radius * 1.6, 72]} />
         <meshStandardMaterial color="#d9dee5" roughness={1} />
       </mesh>
-      {path.length >= 2 && <Line points={path} color="#f5b301" lineWidth={1.5} dashed dashSize={0.25} gapSize={0.18} transparent opacity={0.7} />}
-      {up && (
-        <mesh position={[cx + sun.x * radius, sun.y * radius, cz + sun.z * radius]}>
-          <sphereGeometry args={[0.38, 24, 16]} />
-          <meshBasicMaterial color="#ffc21a" />
-        </mesh>
-      )}
       {up && patches.length > 0 && <mesh geometry={beams} material={BEAM} renderOrder={5} />}
     </group>
   )

@@ -74,6 +74,23 @@ export type ShapeId =
   | 'washer'
   | 'powerStrip'
   | 'ceilingLight'
+  | 'standbyMe'
+  | 'cornerSofa'
+  | 'recliner'
+  | 'beanbag'
+  | 'cubeShelf'
+  | 'mattress'
+  | 'vanity'
+  | 'mirror'
+  | 'hanger'
+  | 'standingDesk'
+  | 'piano'
+  | 'counter'
+  | 'tower'
+  | 'fan'
+  | 'puck'
+  | 'pendant'
+  | 'catTower'
 
 /** 가구 라이브러리에 들어있는 "부품" (KiCad의 심볼+풋프린트 같은 것) */
 export type FurnitureLibraryItem = {

@@ -21,6 +21,7 @@ const MODES: { id: ViewMode; name: string }[] = [
 const SHORTCUTS: [string, string][] = [
   ['가구 드래그', '이동 (정렬 자리에 붙음)'],
   ['방향키', '1cm 이동 (Shift: 10cm)'],
+  ['창문·콘센트 + 방향키', '←→ 벽을 따라, ↑↓ 높이'],
   ['R', '가구 회전'],
   ['Delete', '선택한 것 삭제'],
   ['V', '보기 전환 (전체·가구·전기·구조)'],

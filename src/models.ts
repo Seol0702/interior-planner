@@ -18,6 +18,7 @@ export type Tone =
   | 'book1'
   | 'book2'
   | 'book3'
+  | 'mirror' // 거울·유리
 
 /** 부품 하나. x,y,z는 부품 중심 (가구 바닥 중심이 0,0,0 / y가 위쪽 / +z가 가구 앞쪽), 단위 mm */
 export type Part = {
@@ -29,15 +30,18 @@ export type Part = {
   w: number
   h: number
   d: number
-  axis?: 'y' | 'z' // 원기둥이 서 있는 방향
+  axis?: 'x' | 'y' | 'z' // 원기둥이 놓인 방향 (y = 세워짐)
 }
 
 const box = (tone: Tone, x: number, y: number, z: number, w: number, h: number, d: number): Part =>
   ({ kind: 'box', tone, x, y, z, w, h, d })
-const cyl = (tone: Tone, x: number, y: number, z: number, dia: number, h: number, axis: 'y' | 'z' = 'y'): Part =>
+const cyl = (tone: Tone, x: number, y: number, z: number, dia: number, h: number, axis: 'x' | 'y' | 'z' = 'y'): Part =>
   ({ kind: 'cyl', tone, x, y, z, w: dia, h, d: dia, axis })
 const ball = (tone: Tone, x: number, y: number, z: number, dia: number): Part =>
   ({ kind: 'ball', tone, x, y, z, w: dia, h: dia, d: dia })
+/** 찌그러진 공 (빈백 등) */
+const blob = (tone: Tone, x: number, y: number, z: number, w: number, h: number, d: number): Part =>
+  ({ kind: 'ball', tone, x, y, z, w, h, d })
 
 /** 네 귀퉁이 다리 */
 const legs = (tone: Tone, lx: number, lz: number, h: number, t: number): Part[] =>
@@ -231,7 +235,11 @@ const builders: Record<ShapeId, Builder> = {
     ]
   },
 
-  rug: (W, D) => [box('main', 0, 6, 0, W, 12, D), box('accent', 0, 8, 0, W - 240, 12, D - 240)],
+  // 러그: 가로세로가 같으면 둥근 러그로
+  rug: (W, D) =>
+    W === D
+      ? [cyl('main', 0, 6, 0, W, 12), cyl('accent', 0, 8, 0, W - 240, 12)]
+      : [box('main', 0, 6, 0, W, 12, D), box('accent', 0, 8, 0, W - 240, 12, D - 240)],
 
   fridge: (W, D, H) => {
     const parts: Part[] = [box('main', 0, H / 2, -25, W, H, D - 50)]
@@ -270,6 +278,207 @@ const builders: Record<ShapeId, Builder> = {
     cyl('screen', 0, H * 0.48, D / 2 - 10, W * 0.46, 12, 'z'), // 유리
     box('accent', 0, H - 70, D / 2 - 16, W - 60, 70, 8), // 조작부
   ],
+
+  // ───────── 아래부터 인기 가구용 모양 ─────────
+
+  // 이동식 TV (스탠바이미형): 바퀴 받침 + 기둥 + 화면
+  standbyMe: (W, D, H) => {
+    const sh = W * 0.58 // 화면 높이
+    const top = H - sh
+    return [
+      cyl('main', 0, 25, 0, D * 0.9, 50), // 받침
+      ...[0, 1, 2, 3, 4].map((i) => ball('dark', Math.sin((i / 5) * Math.PI * 2) * D * 0.38, 18, Math.cos((i / 5) * Math.PI * 2) * D * 0.38, 36)), // 바퀴
+      cyl('main', 0, 50 + (top + sh * 0.4 - 50) / 2, -20, 46, top + sh * 0.4 - 50), // 기둥
+      box('main', 0, top + sh / 2, -10, W * 0.4, sh * 0.3, 40), // 뒤판 받침
+      box('main', 0, top + sh / 2, 18, W, sh, 26), // 화면 테두리
+      box('screen', 0, top + sh / 2, 32, W - 24, sh - 24, 4), // 화면
+    ]
+  },
+
+  // 카우치 소파: 등받이 쪽 긴 소파 + 오른쪽 앞으로 튀어나온 긴 의자
+  cornerSofa: (W, D, H) => {
+    const lh = 60
+    const sb = H * 0.3
+    const bt = 200
+    const sd = Math.min(950, D * 0.6) // 일반 좌석 깊이
+    const cw = Math.min(850, W * 0.35) // 긴 의자 폭
+    const aw = 160
+    const seatTop = lh + sb
+    const parts: Part[] = [
+      box('main', 0, lh + sb / 2, -D / 2 + sd / 2, W, sb, sd),
+      box('main', W / 2 - cw / 2, lh + sb / 2, -D / 2 + sd + (D - sd) / 2, cw, sb, D - sd),
+      box('main', 0, seatTop + (H - seatTop) / 2, -D / 2 + bt / 2, W, H - seatTop, bt),
+      box('main', -W / 2 + aw / 2, lh + (H * 0.7 - lh) / 2, -D / 2 + sd / 2, aw, H * 0.7 - lh, sd),
+      // 다리: 받침이 있는 자리에만 (왼쪽 앞은 좌석 깊이까지만 온다)
+      ...[[-W / 2 + 60, -D / 2 + 60], [W / 2 - 60, -D / 2 + 60], [-W / 2 + 60, -D / 2 + sd - 60], [W / 2 - 60, D / 2 - 60], [W / 2 - cw + 60, D / 2 - 60]].map(
+        ([x, z]) => box('dark', x, lh / 2, z, 50, lh, 50),
+      ),
+    ]
+    const inner = W - aw - cw // 긴 의자를 뺀 좌석 폭
+    const n = Math.max(1, Math.round(inner / 700))
+    const w = inner / n
+    for (let i = 0; i < n; i++) parts.push(box('accent', -W / 2 + aw + w * (i + 0.5), seatTop + 55, -D / 2 + bt + (sd - bt) / 2, w - 16, 110, sd - bt - 16))
+    parts.push(box('accent', W / 2 - cw / 2, seatTop + 55, (-D / 2 + bt + D / 2) / 2, cw - 16, 110, D - bt - 16))
+    const bn = Math.max(2, Math.round((W - aw) / 700))
+    const bw = (W - aw) / bn
+    for (let i = 0; i < bn; i++) parts.push(box('accent', -W / 2 + aw + bw * (i + 0.5), seatTop + 110 + (H - seatTop - 110) * 0.42, -D / 2 + bt + 50, bw - 16, (H - seatTop - 110) * 0.8, 100))
+    return parts
+  },
+
+  // 리클라이너: 1인 소파 + 앞으로 펼쳐진 발받침
+  recliner: (W, D, H) => [
+    ...builders.sofa(W, D * 0.82, H).map((p) => ({ ...p, z: p.z - D * 0.09 })),
+    box('main', 0, 260, D / 2 - 110, W * 0.62, 90, 200),
+    box('dark', 0, 130, D / 2 - 160, 50, 200, 40),
+  ],
+
+  // 빈백: 둥근 쿠션 두 덩어리
+  beanbag: (W, D, H) => [
+    blob('main', 0, H * 0.36, D * 0.05, W, H * 0.72, D * 0.9),
+    blob('accent', 0, H * 0.62, -D * 0.2, W * 0.78, H * 0.62, D * 0.5),
+  ],
+
+  // 큐브 선반 (칼락스형): 정사각 칸 + 일부 칸에 수납 바구니
+  cubeShelf: (W, D, H) => {
+    const t = 22
+    const cols = Math.max(1, Math.round(W / 380))
+    const rows = Math.max(1, Math.round(H / 380))
+    const parts: Part[] = [
+      box('main', 0, H - t / 2, 0, W, t, D),
+      box('main', 0, t / 2, 0, W, t, D),
+      box('main', -W / 2 + t / 2, H / 2, 0, t, H, D),
+      box('main', W / 2 - t / 2, H / 2, 0, t, H, D),
+    ]
+    for (let i = 1; i < cols; i++) parts.push(box('main', -W / 2 + (W * i) / cols, H / 2, 0, t, H - 2 * t, D))
+    for (let j = 1; j < rows; j++) parts.push(box('main', 0, (H * j) / rows, 0, W - 2 * t, t, D))
+    const cw = (W - t) / cols - t
+    const ch = (H - t) / rows - t
+    for (let i = 0; i < cols; i++) {
+      for (let j = 0; j < rows; j++) {
+        if ((i + j * 2) % 3 !== 0) continue
+        parts.push(box('accent', -W / 2 + (W * (i + 0.5)) / cols, (H * (j + 0.5)) / rows, D * 0.05, cw * 0.88, ch * 0.88, D * 0.85))
+      }
+    }
+    return parts
+  },
+
+  // 매트리스·토퍼: 두툼한 판 + 윗면 커버
+  mattress: (W, D, H) => [box('white', 0, H * 0.42, 0, W, H * 0.84, D), box('accent', 0, H * 0.92, 0, W - 20, H * 0.16, D - 20)],
+
+  // 화장대: 책상 + 서랍 + 위쪽 거울
+  vanity: (W, D, H) => {
+    const th = 750 // 상판 높이
+    return [
+      box('main', 0, th - 15, 0, W, 30, D),
+      box('main', W / 2 - 200, (th - 30) / 2, 0, 380, th - 30, D - 20),
+      box('accent', W / 2 - 200, (th - 30) / 2, D / 2 - 12, 360, th - 60, 8),
+      box('main', -W / 2 + 25, (th - 30) / 2, D / 2 - 40, 40, th - 30, 40),
+      box('main', -W / 2 + 25, (th - 30) / 2, -D / 2 + 40, 40, th - 30, 40),
+      box('main', 0, th + (H - th) / 2, -D / 2 + 20, W * 0.62, H - th, 30), // 거울 틀
+      box('mirror', 0, th + (H - th) / 2, -D / 2 + 37, W * 0.62 - 50, H - th - 50, 6),
+    ]
+  },
+
+  // 전신거울: 세워 둔 긴 거울 + 받침
+  mirror: (W, D, H) => [
+    box('main', 0, 20, 0, W * 0.9, 40, D),
+    box('main', 0, H / 2 + 20, -D / 2 + 25, W, H - 40, 40),
+    box('mirror', 0, H / 2 + 20, -D / 2 + 48, W - 60, H - 100, 6),
+  ],
+
+  // 행거: 양쪽 기둥 + 위 봉 + 걸린 옷 + 아래 선반
+  hanger: (W, D, H) => {
+    const parts: Part[] = [
+      box('metal', -W / 2 + 20, 15, 0, 40, 30, D),
+      box('metal', W / 2 - 20, 15, 0, 40, 30, D),
+      cyl('metal', -W / 2 + 20, H / 2, 0, 30, H),
+      cyl('metal', W / 2 - 20, H / 2, 0, 30, H),
+      cyl('metal', 0, H - 30, 0, 26, W - 40, 'x'), // 옷 거는 봉
+      box('main', 0, 260, 0, W - 60, 20, D - 40), // 아래 선반
+    ]
+    const tones: Tone[] = ['accent', 'book2', 'main', 'book1', 'accent', 'book3']
+    const n = Math.max(1, Math.floor((W - 160) / 120))
+    for (let i = 0; i < n; i++) {
+      const x = -W / 2 + 80 + ((W - 160) * (i + 0.5)) / n
+      const len = H * (i % 2 === 0 ? 0.48 : 0.36)
+      parts.push(box(tones[i % tones.length], x, H - 80 - len / 2, 0, 60, len, D * 0.82))
+    }
+    return parts
+  },
+
+  // 모션데스크: 상판 + T자 다리 2개 + 가로대 + 조작부
+  standingDesk: (W, D, H) => [
+    box('main', 0, H - 15, 0, W, 30, D),
+    ...[-1, 1].flatMap((s) => [
+      box('metal', s * (W / 2 - 160), (H - 30) / 2 + 15, 0, 70, H - 60, 70),
+      box('metal', s * (W / 2 - 160), 15, 0, 70, 30, D - 60),
+    ]),
+    box('metal', 0, H - 70, 0, W - 330, 40, 40),
+    box('dark', W / 2 - 180, H - 40, D / 2 - 40, 140, 20, 60),
+  ],
+
+  // 디지털 피아노: 다리 + 건반대 + 건반 + 뒤판 + 페달
+  piano: (W, D, H) => [
+    box('main', -W / 2 + 20, 360, 0, 40, 720, D),
+    box('main', W / 2 - 20, 360, 0, 40, 720, D),
+    box('main', 0, H / 2, -D / 2 + 50, W, H, 100),
+    box('main', 0, 760, 20, W, 80, D - 40),
+    box('white', 0, 810, D / 2 - 110, W - 100, 22, 180),
+    box('dark', 0, 30, -D / 2 + 170, W * 0.28, 60, 120),
+  ],
+
+  // 아일랜드·홈바: 수납장 + 넓은 상판 + 문
+  counter: (W, D, H) => {
+    const n = Math.max(2, Math.round(W / 450))
+    const dw = (W - 40) / n
+    const parts: Part[] = [box('main', 0, (H - 40) / 2, -20, W - 40, H - 40, D - 80), box('accent', 0, H - 20, 0, W, 40, D)]
+    for (let i = 0; i < n; i++) {
+      const x = -W / 2 + 20 + dw * (i + 0.5)
+      parts.push(box('main', x, (H - 40) / 2, D / 2 - 55, dw - 8, H - 80, 10))
+      parts.push(box('dark', x + dw / 2 - 40, H - 140, D / 2 - 46, 12, 120, 12))
+    }
+    return parts
+  },
+
+  // 세로로 긴 가전 (공기청정기·스탠드 에어컨): 몸통 + 위쪽 송풍구 + 표시창
+  tower: (W, D, H) => [
+    box('main', 0, H / 2, 0, W, H, D),
+    box('accent', 0, H - 6, 0, W - 40, 14, D - 40),
+    box('accent', 0, H * 0.72, D / 2 + 1, W - 60, H * 0.32, 4),
+    box('screen', 0, H * 0.5, D / 2 + 2, Math.min(90, W * 0.3), 40, 4),
+  ],
+
+  // 선풍기: 받침 + 기둥 + 모터 + 날개 덮개
+  fan: (W, D, H) => [
+    cyl('dark', 0, 20, 0, Math.min(W, D) * 0.7, 40),
+    cyl('metal', 0, 40 + (H - W / 2 - 80) / 2, 0, 30, H - W / 2 - 80),
+    box('main', 0, H - W / 2, -60, 120, 140, 150),
+    cyl('accent', 0, H - W / 2, 40, W, 60, 'z'),
+    cyl('main', 0, H - W / 2, 75, W * 0.18, 20, 'z'),
+  ],
+
+  // 납작한 원통 (로봇청소기 등)
+  puck: (W, _D, H) => [cyl('main', 0, H * 0.42, 0, W, H * 0.84), cyl('accent', 0, H * 0.9, 0, W * 0.35, H * 0.14)],
+
+  // 펜던트 조명: 천장 덮개 + 줄 + 갓 (부품 좌표 0~H, 그릴 때 천장 높이에 맞춰 올림)
+  pendant: (W, _D, H) => [
+    cyl('main', 0, H - 15, 0, 120, 30),
+    cyl('dark', 0, 260 + (H - 290) / 2, 0, 12, H - 290),
+    cyl('main', 0, 200, 0, W * 0.35, 120),
+    cyl('glow', 0, 90, 0, W, 180),
+  ],
+
+  // 캣타워: 받침 + 기둥 2개 + 층판 + 숨숨집
+  catTower: (W, D, H) => [
+    box('main', 0, 30, 0, W, 60, D),
+    cyl('accent', -W * 0.3, H / 2, 0, 100, H - 60),
+    cyl('accent', W * 0.25, (H * 0.65) / 2 + 30, D * 0.1, 90, H * 0.65 - 60),
+    box('main', W * 0.05, H * 0.38, 0, W * 0.85, 30, D * 0.8),
+    box('main', 0, H * 0.65, 0, W * 0.7, 30, D * 0.75),
+    box('main', -W * 0.25, H - 15, 0, W * 0.5, 30, D * 0.6),
+    box('main', W * 0.2, 60 + 150, 0, W * 0.5, 300, D * 0.7), // 숨숨집
+    cyl('dark', W * 0.2, 60 + 140, D * 0.35 + 3, 150, 6, 'z'),
+  ],
 }
 
 /** 모양 + 치수 → 부품 목록 */
@@ -290,5 +499,6 @@ export function toneColor(tone: Tone, main: string, accent: string): string {
     case 'book1': return '#b5544a'
     case 'book2': return '#4f6f8f'
     case 'book3': return '#d9b65c'
+    case 'mirror': return '#cfdfe8'
   }
 }

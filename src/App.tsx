@@ -240,6 +240,8 @@ export default function App() {
       wallItems: p.wallItems.map((i) => {
         if (i.id !== id) return i
         const next = { ...i, ...patch }
+        // 문은 바닥에 붙어 있고, 창문·콘센트는 바닥과 천장 사이에서만 움직인다
+        next.sill = next.kind === 'door' ? 0 : Math.min(Math.max(0, next.sill), Math.max(0, p.wallHeight - next.height))
         const room = p.rooms.find((r) => r.id === next.roomId)
         return room ? clampWallItem(next, room) : i
       }),
@@ -250,6 +252,16 @@ export default function App() {
   const moveWallItem = (id: string, x: number, y: number) => {
     const edge = nearestEdge(latest.current.rooms, x, y)
     if (edge) changeWallItem(id, { roomId: edge.roomId, side: edge.side, offset: snap(edge.offset) })
+  }
+
+  /** 3D에서 끌기: 같은 벽 위에서 옆으로(along), 위아래로(height) 움직인다 */
+  const moveWallItemOnWall = (id: string, along: number, height: number) => {
+    const p = latest.current
+    const item = p.wallItems.find((i) => i.id === id)
+    const room = item && p.rooms.find((r) => r.id === item.roomId)
+    if (!item || !room) return
+    const start = item.side === 'N' || item.side === 'S' ? room.x : room.y // 그 변이 시작하는 좌표
+    changeWallItem(id, { offset: snap(along - start), sill: snap(height) })
   }
 
   // ───────── 가구 ─────────
@@ -331,6 +343,13 @@ export default function App() {
 
   /** 방향키 이동. 3D에서는 "지금 보는 방향" 기준으로 위쪽 키 = 화면 안쪽 */
   const nudge = (right: number, forward: number, step: number) => {
+    // 문·창문·콘센트: ←→ 벽을 따라 이동, ↑↓ 높이 (문은 바닥에 붙어 있어 높이는 그대로)
+    if (selectedWallItem) {
+      // 키를 빠르게 연달아 누를 때도 밀리지 않게 "가장 최신" 값에서 계산한다
+      const now = latest.current.wallItems.find((i) => i.id === selectedWallItem.id)
+      if (now) changeWallItem(now.id, { offset: now.offset + right * step, sill: now.sill + forward * step })
+      return
+    }
     if (!selectedFurniture) return
     let fx = 0
     let fy = -1 // 2D 평면도 기준: 위쪽 키 = 평면도 위쪽
@@ -507,7 +526,7 @@ export default function App() {
         case 'ArrowRight': nudge(1, 0, step); break
         default: return
       }
-      if (e.code.startsWith('Arrow') && selectedFurniture) e.preventDefault() // 페이지가 스크롤되지 않게
+      if (e.code.startsWith('Arrow') && (selectedFurniture || selectedWallItem)) e.preventDefault() // 페이지가 스크롤되지 않게
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey) // 정리(청소)
@@ -637,6 +656,7 @@ export default function App() {
                   onSelect={setSelection}
                   onFloorClick={(roomId, x, y) => (tool === 'select' ? setSelection({ type: 'room', id: roomId }) : planClick(x, y))}
                   onMoveFurniture={moveFurniture}
+                  onMoveWallItem={moveWallItemOnWall}
                   onDragEnd={() => setGuides([])}
                 />
               </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Finish, RoomShape, Selection, WallItem } from '../types'
@@ -17,8 +17,11 @@ type Props = {
   showWalls: boolean // 벽·문·창문 보이기
   showElectric: boolean // 콘센트 보이기
   shadows: boolean // 햇빛 효과가 켜져 있는가
+  interactive: boolean // 선택 도구일 때만 문·창문·콘센트를 끌어서 옮길 수 있다
   onFloorClick: (roomId: string, x: number, y: number) => void
   onSelect: (selection: Selection) => void
+  onMoveWallItem: (id: string, along: number, height: number) => void // along: 벽 방향 위치, height: 바닥에서 높이 (mm)
+  onDragEnd: () => void
 }
 
 type Attached = { item: WallItem; span: Span; piece: WallPiece }
@@ -28,7 +31,7 @@ const SHADOW_ONLY = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite:
 
 /** 평면도(방들)를 3D로: 바닥 + 벽 + 문·창문·콘센트 */
 export default function Plan3D(props: Props) {
-  const { rooms, pieces, wallItems, wallHeight, selection, showWalls, showElectric, shadows, onFloorClick, onSelect } = props
+  const { rooms, pieces, wallItems, wallHeight, selection, showWalls, showElectric, shadows, interactive, onFloorClick, onSelect, onMoveWallItem, onDragEnd } = props
   const roomById = useMemo(() => new Map(rooms.map((r) => [r.id, r])), [rooms])
 
   // 문·창문·콘센트가 각각 어느 벽 조각에 붙어 있는지 찾는다
@@ -78,7 +81,10 @@ export default function Plan3D(props: Props) {
             key={a.item.id}
             attached={a}
             selected={selection?.type === 'wallItem' && selection.id === a.item.id}
+            interactive={interactive}
             onSelect={() => onSelect({ type: 'wallItem', id: a.item.id })}
+            onMove={(along, height) => onMoveWallItem(a.item.id, along, height)}
+            onDragEnd={onDragEnd}
           />
         ) : null,
       )}
@@ -236,10 +242,17 @@ function Wall({ piece, height, finish, otherFinish, holes, shadows }: WallProps)
 const FRAME = '#f1f0ec'
 const DOOR = '#c9a37a'
 
-type WallItemMeshProps = { attached: Attached; selected: boolean; onSelect: () => void }
+type WallItemMeshProps = {
+  attached: Attached
+  selected: boolean
+  interactive: boolean
+  onSelect: () => void
+  onMove: (along: number, height: number) => void
+  onDragEnd: () => void
+}
 
-/** 문·창문·콘센트의 3D 모양 */
-function WallItemMesh({ attached, selected, onSelect }: WallItemMeshProps) {
+/** 문·창문·콘센트의 3D 모양. 끌면 벽을 따라 옆으로, 위아래로 움직인다 */
+function WallItemMesh({ attached, selected, interactive, onSelect, onMove, onDragEnd }: WallItemMeshProps) {
   const { item, span, piece } = attached
   const T = mm(WALL_THICKNESS)
   const w = mm(item.width)
@@ -266,14 +279,57 @@ function WallItemMesh({ attached, selected, onSelect }: WallItemMeshProps) {
     toCamera.subVectors(camera.position, center)
     ref.current.visible = toCamera.x * piece.nx + toCamera.z * piece.ny < 0
   })
-  const click = (e: ThreeEvent<MouseEvent>) => {
-    if (e.delta > 4) return
+  // ── 끌어서 옮기기 ──
+  // 마우스 광선이 "벽면"(세로로 선 평면)의 어디에 닿는지로 위치를 정한다
+  const controls = useThree((state) => state.controls) as { enabled: boolean } | null
+  const plane = useMemo(
+    () =>
+      piece.horizontal
+        ? new THREE.Plane(new THREE.Vector3(0, 0, 1), -mm(span.line))
+        : new THREE.Plane(new THREE.Vector3(1, 0, 0), -mm(span.line)),
+    [piece.horizontal, span.line],
+  )
+  const drag = useRef<{ da: number; dh: number } | null>(null)
+  /** 마우스 위치 → (벽 방향 위치, 바닥에서 높이) mm */
+  const wallPoint = (e: ThreeEvent<PointerEvent>) => {
+    const hit = e.ray.intersectPlane(plane, new THREE.Vector3())
+    return hit ? { along: (piece.horizontal ? hit.x : hit.z) * 1000, height: hit.y * 1000 } : null
+  }
+  const down = (e: ThreeEvent<PointerEvent>) => {
+    if (!interactive || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return
     e.stopPropagation()
     onSelect()
+    const p = wallPoint(e)
+    if (!p) return
+    // 잡은 지점과 물건 위치의 차이를 기억 → 잡은 자리 그대로 따라오게
+    drag.current = { da: along - p.along, dh: item.sill - p.height }
+    ;(e.target as unknown as Element).setPointerCapture(e.pointerId)
+    if (controls) controls.enabled = false
+  }
+  const move = (e: ThreeEvent<PointerEvent>) => {
+    if (!drag.current) return
+    const p = wallPoint(e)
+    if (p) onMove(p.along + drag.current.da, p.height + drag.current.dh)
+  }
+  const up = (e: ThreeEvent<PointerEvent>) => {
+    if (!drag.current) return
+    drag.current = null
+    ;(e.target as unknown as Element).releasePointerCapture(e.pointerId)
+    if (controls) controls.enabled = true
+    onDragEnd()
   }
 
   return (
-    <group ref={ref} position={position} rotation={rotation} onClick={click}>
+    <group
+      ref={ref}
+      position={position}
+      rotation={rotation}
+      onPointerDown={down}
+      onPointerMove={move}
+      onPointerUp={up}
+      onPointerOver={() => interactive && (document.body.style.cursor = 'grab')}
+      onPointerOut={() => (document.body.style.cursor = '')}
+    >
       {item.kind === 'window' && (
         <group position={[0, sill + h / 2, 0]}>
           {/* 창틀 4개 + 가운데 살 + 유리 */}

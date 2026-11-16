@@ -28,7 +28,7 @@ type Props = {
 }
 
 const MARGIN = 800 // 평면도 둘레 여백 (mm)
-const ROUND = ['roundTable', 'stool', 'lamp', 'plant', 'ceilingLight']
+const ROUND = ['roundTable', 'stool', 'lamp', 'plant', 'ceilingLight', 'pendant', 'beanbag', 'puck', 'fan']
 
 /** 위에서 내려다본 2D 평면도. 방·가구·문·창문·메모를 끌어서 옮길 수 있다 */
 export default function Plan2D(props: Props) {
@@ -166,7 +166,7 @@ export default function Plan2D(props: Props) {
               y={-item.depth / 2}
               width={item.width}
               height={item.depth}
-              rx={ROUND.includes(item.shape) ? item.width / 2 : 20}
+              rx={ROUND.includes(item.shape) || (item.shape === 'rug' && item.width === item.depth) ? item.width / 2 : 20}
               fill={f.color ?? item.color}
               fillOpacity={item.mount === 'ceiling' ? 0.45 : 1}
               stroke={selected ? '#2563eb' : '#52525b'}

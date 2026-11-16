@@ -58,6 +58,9 @@ export function WallItemCard({ item, room, onChange, onDelete, onClose }: WallIt
         <NumberField label="높이" unit="cm" value={item.height} min={50} max={4000} onCommit={(height) => onChange({ height })} />
         {item.kind !== 'door' && <NumberField label="바닥에서 높이" unit="cm" value={item.sill} min={0} max={4000} onCommit={(sill) => onChange({ sill })} />}
       </div>
+      <p className="hint">
+        끌어서 옮기거나 방향키로 1cm씩 조절해요. ←→ 벽을 따라{item.kind !== 'door' && ', ↑↓ 높이'} (Shift: 10cm)
+      </p>
       {item.kind === 'door' && (
         <div className="inline-actions">
           <button className="btn sm" onClick={() => onChange({ flip: !item.flip })}>
