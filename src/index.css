@@ -215,3 +215,7 @@ button.danger:hover {
   white-space: nowrap;
   pointer-events: none;
 }
+
+.row.wrap {
+  flex-wrap: wrap;
+}

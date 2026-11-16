@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import type { FurnitureInstance, Project, Room } from './types'
+import { DEFAULT_PROJECT, loadFromBrowser, saveToBrowser } from './project'
 import { mm } from './units'
 import { findLibraryItem } from './library'
 import { newId, placeInRoom } from './layout'
@@ -10,17 +11,30 @@ import RoomForm from './components/RoomForm'
 import LibraryPanel from './components/LibraryPanel'
 import SelectionPanel from './components/SelectionPanel'
 import FurnitureMesh from './components/FurnitureMesh'
-
-const DEFAULT_PROJECT: Project = {
-  version: 1,
-  room: { width: 4000, depth: 3500, height: 2400 },
-  furniture: [],
-}
+import FilePanel from './components/FilePanel'
 
 export default function App() {
   // useState: 화면에 영향을 주는 값. 바뀌면 화면이 자동으로 다시 그려진다
-  const [project, setProject] = useState<Project>(DEFAULT_PROJECT)
+  // 처음 켤 때 브라우저에 저장돼 있던 작업을 불러온다
+  const [project, setProject] = useState<Project>(loadFromBrowser)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // 불러오기 할 때마다 1씩 올려서 3D 화면(카메라)을 새로 시작시키는 번호
+  const [viewKey, setViewKey] = useState(0)
+
+  // project가 바뀔 때마다 브라우저에 자동 저장
+  useEffect(() => saveToBrowser(project), [project])
+
+  /** 파일에서 불러온 프로젝트로 통째로 바꾸기 */
+  const replaceProject = (next: Project) => {
+    // 파일 속 가구도 방 안·그리드에 맞게 정리해서 넣기
+    const furniture = next.furniture.map((f) => {
+      const item = findLibraryItem(f.libraryId)
+      return item ? placeInRoom(f, item, next.room) : f
+    })
+    setProject({ ...next, furniture })
+    setSelectedId(null)
+    setViewKey((k) => k + 1)
+  }
 
   const { room, furniture } = project
   const selected = furniture.find((f) => f.id === selectedId) ?? null
@@ -92,7 +106,8 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <h1>3D 인테리어 플래너</h1>
-        <RoomForm room={room} onChange={changeRoom} />
+        {/* key가 바뀌면 입력칸도 새 방 크기로 다시 채워진다 */}
+        <RoomForm key={viewKey} room={room} onChange={changeRoom} />
         <LibraryPanel onAdd={addFurniture} />
         {selected && selectedItem && (
           <SelectionPanel
@@ -102,6 +117,11 @@ export default function App() {
             onDelete={deleteSelected}
           />
         )}
+        <FilePanel
+          project={project}
+          onLoad={replaceProject}
+          onReset={() => replaceProject(DEFAULT_PROJECT)}
+        />
         <section className="panel help">
           <h2>조작법</h2>
           <ul>
@@ -115,6 +135,7 @@ export default function App() {
       <main className="viewport">
         {/* onPointerMissed: 가구가 아닌 빈 곳을 클릭하면 선택 해제 */}
         <Canvas
+          key={viewKey}
           camera={{ position: [center[0] + 4, 5, center[2] + 6], fov: 50 }}
           onPointerMissed={() => setSelectedId(null)}
         >
