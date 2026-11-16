@@ -6,20 +6,28 @@ const LEVEL_NAME = { error: '오류', warn: '주의', info: '참고' }
 export default function DrcPanel({ issues, onPick }: { issues: Issue[]; onPick: (issue: Issue) => void }) {
   const count = (level: Issue['level']) => issues.filter((i) => i.level === level).length
   return (
-    <section className="panel">
+    <>
       <div className="panel-head">
-        <h2>배치 검사</h2>
-        <span className="total">
-          오류 <strong>{count('error')}</strong> · 주의 <strong>{count('warn')}</strong> · 참고 <strong>{count('info')}</strong>
-        </span>
+        <div>
+          <h2>배치 검사</h2>
+          <p className="sub">가구를 옮길 때마다 자동으로 검사해요</p>
+        </div>
+      </div>
+      <div className="stats">
+        {(['error', 'warn', 'info'] as const).map((level) => (
+          <div key={level} className={`stat ${level}`}>
+            <strong>{count(level)}</strong>
+            <span>{LEVEL_NAME[level]}</span>
+          </div>
+        ))}
       </div>
       {issues.length === 0 ? (
-        <p className="hint">문제를 찾지 못했어요. 가구를 옮기면 자동으로 다시 검사해요.</p>
+        <p className="empty">문제를 찾지 못했어요.</p>
       ) : (
-        <ul className="issues">
+        <ul className="rows">
           {issues.map((issue) => (
             <li key={issue.id}>
-              <button onClick={() => onPick(issue)}>
+              <button className="row" onClick={() => onPick(issue)}>
                 <span className={`badge ${issue.level}`}>{LEVEL_NAME[issue.level]}</span>
                 <span>{issue.message}</span>
               </button>
@@ -27,7 +35,7 @@ export default function DrcPanel({ issues, onPick }: { issues: Issue[]; onPick: 
           ))}
         </ul>
       )}
-      <p className="hint">검사 항목: 가구 겹침, 문 열림 충돌, 창문·콘센트 가림, 좁은 틈, 문 앞 전선, 문 없는 방</p>
-    </section>
+      <p className="hint">검사 항목: 가구 겹침, 문 열림 충돌, 창문·콘센트 가림, 좁은 틈, 문 앞을 지나는 전선, 문 없는 방</p>
+    </>
   )
 }

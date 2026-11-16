@@ -34,7 +34,7 @@ export default function NumberField({ label, value, min, max, onCommit, unit = '
   }
 
   return (
-    <label>
+    <label className="field">
       {label}
       <span className="unit-input">
         <input

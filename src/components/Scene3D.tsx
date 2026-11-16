@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import type { Lighting, Point, Project, Selection, Tool } from '../types'
 import type { Guide } from '../guides'
 import type { Issue } from '../drc'
-import type { Sun } from '../sun'
+import { daylight, sunDirection, type Sun, type SunPatch } from '../sun'
 import { bounds, type WallPiece } from '../plan'
 import { findLibraryItem } from '../library'
 import { posePosition, viewPose } from '../camera'
@@ -14,6 +14,7 @@ import Plan3D from './Plan3D'
 import FurnitureMesh from './FurnitureMesh'
 import Guides3D from './Guides3D'
 import CameraRig, { type ViewRequest } from './CameraRig'
+import Compass from './Compass'
 
 export type Visible = { walls: boolean; furniture: boolean; electric: boolean; notes: boolean; expandNotes: boolean }
 
@@ -28,6 +29,7 @@ type Props = {
   draft: Point[] | null // 그리고 있는 전선
   lighting: Lighting
   sun: Sun
+  patches: SunPatch[] // 창문으로 햇빛이 드는 자리
   viewRequest: ViewRequest | null
   cameraRef: RefObject<THREE.Camera | null>
   onSelect: (selection: Selection) => void
@@ -38,7 +40,8 @@ type Props = {
 
 /** 3D 화면 전체 */
 export default function Scene3D(props: Props) {
-  const { project, pieces, selection, guides, issues, visible, tool, draft, lighting, sun, viewRequest, cameraRef } = props
+  const { project, pieces, selection, guides, issues, visible, tool, draft, lighting, sun, patches, viewRequest, cameraRef } = props
+  const compass = useRef<HTMLDivElement>(null)
   const { onSelect, onFloorClick, onMoveFurniture, onDragEnd } = props
   // 처음 켰을 때의 카메라 자세 (한 번만 계산)
   const [pose] = useState(() => viewPose('iso', project.rooms))
@@ -92,6 +95,8 @@ export default function Scene3D(props: Props) {
       onPointerMissed={() => tool === 'select' && onSelect(null)}
     >
       <Lights project={project} lighting={lighting} sun={sun} />
+      {lighting.enabled && !lighting.night && <SunSky project={project} lighting={lighting} sun={sun} patches={patches} />}
+      <CompassSync target={compass} north={project.north} />
 
       <Plan3D
         rooms={project.rooms}
@@ -170,6 +175,7 @@ export default function Scene3D(props: Props) {
 
     {/* 3D 화면 위에 겹쳐 놓는 층. 각 항목의 화면 위치는 Projector가 매 순간 맞춰 준다 */}
     <div className="overlay">
+      <Compass innerRef={compass} />
       {anchors.map((a) => (
         <div
           key={a.id}
@@ -206,13 +212,93 @@ function Projector({ anchors, nodes }: { anchors: Anchor[]; nodes: RefObject<Map
   return null
 }
 
+/** 시점이 돌 때마다 나침반 바늘이 북쪽을 가리키도록 각도를 맞춘다 */
+function CompassSync({ target, north }: { target: RefObject<HTMLDivElement | null>; north: number }) {
+  const dir = useMemo(() => new THREE.Vector3(), [])
+  const up = useMemo(() => new THREE.Vector3(), [])
+  useFrame(({ camera }) => {
+    if (!target.current) return
+    camera.getWorldDirection(dir)
+    let x = dir.x
+    let z = dir.z
+    if (Math.hypot(x, z) < 0.05) {
+      // 바로 위에서 내려다볼 때는 화면 위쪽 방향을 기준으로 삼는다
+      up.set(0, 1, 0).applyQuaternion(camera.quaternion)
+      x = up.x
+      z = up.z
+    }
+    const azimuth = (Math.atan2(-x, -z) * 180) / Math.PI // 카메라가 도는 각도
+    target.current.style.setProperty('--rot', `${(azimuth - north).toFixed(1)}deg`)
+  })
+  return null
+}
+
+const BEAM = new THREE.MeshBasicMaterial({ color: '#fff0b3', transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide })
+
+/** 하늘의 해, 해가 하루 동안 지나가는 길, 창문으로 들어오는 빛줄기 */
+function SunSky({ project, lighting, sun, patches }: { project: Project; lighting: Lighting; sun: Sun; patches: SunPatch[] }) {
+  const b = useMemo(() => bounds(project.rooms), [project.rooms])
+  const cx = mm(b.cx)
+  const cz = mm(b.cy)
+  const radius = Math.max(mm(b.w), mm(b.d)) / 2 + 4.5 // 해를 그릴 거리
+
+  // 해 뜰 때부터 질 때까지의 길 (10분 간격으로 점을 찍어 잇는다)
+  const path = useMemo(() => {
+    const { sunrise, sunset } = daylight(lighting.season)
+    const points: [number, number, number][] = []
+    for (let t = sunrise; t <= sunset + 0.001; t += 1 / 6) {
+      const s = sunDirection(Math.min(t, sunset), lighting.season, project.north)
+      points.push([cx + s.x * radius, Math.max(0, s.y) * radius, cz + s.z * radius])
+    }
+    return points
+  }, [lighting.season, project.north, cx, cz, radius])
+
+  // 빛줄기: 창문 네 귀퉁이(near)와 빛이 닿는 네 점(far)을 이은 기둥
+  const beams = useMemo(() => {
+    const positions: number[] = []
+    const indices: number[] = []
+    for (const patch of patches) {
+      const base = positions.length / 3
+      for (const p of [...patch.beam.near, ...patch.beam.far]) positions.push(mm(p.x), mm(p.h), mm(p.y))
+      for (let i = 0; i < 4; i++) {
+        const j = (i + 1) % 4
+        indices.push(base + i, base + j, base + 4 + j, base + i, base + 4 + j, base + 4 + i)
+      }
+    }
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    geometry.setIndex(indices)
+    return geometry
+  }, [patches])
+  useEffect(() => () => beams.dispose(), [beams])
+
+  const up = sun.y > 0.02
+  return (
+    <group>
+      {/* 바깥 땅: 집 그림자가 해를 따라 움직이는 것이 보인다 */}
+      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[cx, -0.02, cz]}>
+        <circleGeometry args={[radius * 1.6, 72]} />
+        <meshStandardMaterial color="#d9dee5" roughness={1} />
+      </mesh>
+      {path.length >= 2 && <Line points={path} color="#f5b301" lineWidth={1.5} dashed dashSize={0.25} gapSize={0.18} transparent opacity={0.7} />}
+      {up && (
+        <mesh position={[cx + sun.x * radius, sun.y * radius, cz + sun.z * radius]}>
+          <sphereGeometry args={[0.38, 24, 16]} />
+          <meshBasicMaterial color="#ffc21a" />
+        </mesh>
+      )}
+      {up && patches.length > 0 && <mesh geometry={beams} material={BEAM} renderOrder={5} />}
+    </group>
+  )
+}
+
 /** 빛: 기본 조명(밝고 평평함) 또는 햇빛·그림자·밤 조명 */
 function Lights({ project, lighting, sun }: { project: Project; lighting: Lighting; sun: Sun }) {
   const light = useRef<THREE.DirectionalLight>(null)
   const b = useMemo(() => bounds(project.rooms), [project.rooms])
   const cx = mm(b.cx)
   const cz = mm(b.cy)
-  const reach = Math.max(mm(b.w), mm(b.d)) / 2 + 4 // 그림자를 계산할 범위
+  const reach = Math.max(mm(b.w), mm(b.d)) / 2 + 7 // 그림자를 계산할 범위
   const sunUp = lighting.enabled && !lighting.night && sun.y > 0.02
 
   // 해는 "방 가운데를 향해" 비춰야 한다. 빛이 향하는 지점(target)을 방 가운데로 옮긴다
@@ -229,7 +315,7 @@ function Lights({ project, lighting, sun }: { project: Project; lighting: Lighti
   if (!lighting.enabled) {
     return (
       <>
-        <color attach="background" args={['#eef0f3']} />
+        <color attach="background" args={['#f1f3f6']} />
         <ambientLight intensity={0.8} />
         <hemisphereLight args={['#ffffff', '#b9b2a6', 0.6]} />
         <directionalLight position={[6, 12, 5]} intensity={1.1} />
@@ -242,9 +328,9 @@ function Lights({ project, lighting, sun }: { project: Project; lighting: Lighti
   const sunColor = new THREE.Color('#ffffff').lerp(new THREE.Color('#ffb066'), low * 0.8)
   return (
     <>
-      <color attach="background" args={[sunUp ? '#dfe9f3' : '#161a24']} />
-      <ambientLight intensity={sunUp ? 0.55 + 0.25 * height : 0.12} />
-      <hemisphereLight args={[sunUp ? '#dbe9ff' : '#3b4a6b', '#8a8173', sunUp ? 0.55 : 0.15]} />
+      <color attach="background" args={[sunUp ? '#' + new THREE.Color('#e3edf7').lerp(new THREE.Color('#f7e2cf'), low * 0.9).getHexString() : '#161a24']} />
+      <ambientLight intensity={sunUp ? 0.5 + 0.2 * height : 0.12} />
+      <hemisphereLight args={[sunUp ? '#dbe9ff' : '#3b4a6b', '#8a8173', sunUp ? 0.5 : 0.15]} />
       {sunUp && (
         <directionalLight
           ref={light}

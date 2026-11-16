@@ -4,30 +4,34 @@ import type {
   Finish, FurnitureInstance, LayerView, Lighting, Note, Point, Project, RoomShape, Selection, Tool, ViewMode, ViewName, WallItem,
 } from './types'
 import { DEFAULT_PROJECT, loadFromBrowser, saveToBrowser } from './project'
-import { findLibraryItem } from './library'
+import { LIBRARY, findLibraryItem } from './library'
 import {
   bounds, clampWallItem, contains, edgeLength, footprint, nearestEdge, newId, placeInPlan, roomRect, unionArea, wallItemSpan, wallPieces,
 } from './plan'
 import { smartSnap, type Box, type Guide } from './guides'
 import { runChecks, type Issue } from './drc'
-import { sunDirection, sunPatches } from './sun'
-import type { WallItemPreset } from './structures'
+import { daylight, sunDirection, sunPatches } from './sun'
+import { WALL_ITEM_PRESETS, type WallItemPreset } from './structures'
+import { furnitureThumbnails } from './thumbnails'
 import { snap, toPyeong } from './units'
 import Scene3D, { type Visible } from './components/Scene3D'
 import Plan2D from './components/Plan2D'
+import Header from './components/Header'
+import Rail, { type Section } from './components/Rail'
+import CanvasBar, { LAYERS } from './components/CanvasBar'
+import Compass from './components/Compass'
 import RoomsPanel from './components/RoomsPanel'
-import LibraryPanel from './components/LibraryPanel'
-import SelectionPanel from './components/SelectionPanel'
-import { NoteCard, WallItemCard, WireCard } from './components/ItemCard'
-import FilePanel from './components/FilePanel'
+import FurniturePanel from './components/FurniturePanel'
+import FinishPanel from './components/FinishPanel'
+import OpeningsPanel from './components/OpeningsPanel'
+import ElectricPanel from './components/ElectricPanel'
 import SunPanel from './components/SunPanel'
 import DrcPanel from './components/DrcPanel'
 import NotesPanel from './components/NotesPanel'
 import RecommendPanel from './components/RecommendPanel'
-import ViewBar, { LAYERS } from './components/ViewBar'
+import SelectionPanel from './components/SelectionPanel'
+import { NoteCard, WallItemCard, WireCard } from './components/ItemCard'
 import type { ViewRequest } from './components/CameraRig'
-
-type SideTab = 'build' | 'check' | 'more'
 
 /** 모든 가구를 (바뀐) 방 안으로 다시 맞춰 넣기 */
 const refit = (furniture: FurnitureInstance[], rooms: RoomShape[]) => {
@@ -68,7 +72,9 @@ export default function App() {
   const [mode, setMode] = useState<ViewMode>('3d')
   const [viewRequest, setViewRequest] = useState<ViewRequest | null>(null)
   const [sceneKey, setSceneKey] = useState(0) // 불러오기 때 방 목록 패널을 새로 시작시키는 번호
-  const [sideTab, setSideTab] = useState<SideTab>('build')
+  const [section, setSection] = useState<Section>('rooms') // 왼쪽 메뉴에서 고른 것
+  const [thumbs, setThumbs] = useState<Record<string, string>>({}) // 가구 미리보기 그림
+  const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null) // 잠깐 떴다 사라지는 알림
   const [layer, setLayer] = useState<LayerView>('all')
   const [tool, setTool] = useState<Tool>('select')
   const [draft, setDraft] = useState<Point[] | null>(null) // 그리고 있는 전선의 점들
@@ -87,6 +93,17 @@ export default function App() {
 
   // project가 바뀔 때마다 브라우저에 자동 저장
   useEffect(() => saveToBrowser(project), [project])
+
+  // 처음 한 번: 가구 미리보기 그림을 만들어 둔다
+  useEffect(() => setThumbs(furnitureThumbnails(LIBRARY)), [])
+
+  // 알림은 3초 뒤에 사라진다
+  const showToast = (text: string, error = false) => setToast({ text, error })
+  useEffect(() => {
+    if (!toast) return
+    const id = setTimeout(() => setToast(null), 3000)
+    return () => clearTimeout(id)
+  }, [toast])
 
   const { rooms, furniture, wallItems, wires, notes } = project
   const find = <T extends { id: string }>(type: NonNullable<Selection>['type'], list: T[]) =>
@@ -200,8 +217,12 @@ export default function App() {
   const addWallItem = (preset: WallItemPreset) => {
     const p = latest.current
     const room = targetRoom()
-    // 처음 붙일 벽: 문은 아래쪽, 창문은 위쪽, 콘센트는 왼쪽 벽. 같은 벽에 이미 있으면 옆으로 비켜 놓는다
-    const side = preset.kind === 'door' ? 'S' : preset.kind === 'window' ? 'N' : 'W'
+    // 처음 붙일 벽: 창문은 햇빛이 드는 남쪽 벽, 문은 그 맞은편, 콘센트는 왼쪽 벽.
+    // 같은 벽에 이미 있으면 옆으로 비켜 놓는다
+    const sides = ['S', 'E', 'N', 'W'] as const // 평면도 방위(0·90·180·270)별 남쪽 벽
+    const south = sides[(Math.round(p.north / 90) % 4 + 4) % 4]
+    const opposite = { S: 'N', N: 'S', E: 'W', W: 'E' } as const
+    const side = preset.kind === 'window' ? south : preset.kind === 'door' ? opposite[south] : 'W'
     const same = p.wallItems.filter((i) => i.roomId === room.id && i.side === side).length
     const length = edgeLength(room, side)
     const item = clampWallItem(
@@ -428,6 +449,14 @@ export default function App() {
     else changeNote(id, { x: snap(x), y: snap(y) })
   }
 
+  /** 하루 재생: 시각을 5분 앞으로. 해가 지면 다시 해 뜰 때로 */
+  const stepTime = () =>
+    setLighting((l) => {
+      const { sunrise, sunset } = daylight(l.season)
+      const next = l.time + 1 / 12
+      return { ...l, night: false, time: next > sunset ? sunrise : Math.max(sunrise, next) }
+    })
+
   /** 검사 목록에서 항목을 누르면 문제가 된 것을 선택하고 보이게 한다 */
   const pickIssue = (issue: Issue) => {
     setSelection(issue.target)
@@ -488,25 +517,18 @@ export default function App() {
   const target = targetRoom()
   const errorCount = issues.filter((i) => i.level !== 'info').length
   const wallItemRoom = selectedWallItem && rooms.find((r) => r.id === selectedWallItem.roomId)
+  const hasWindows = wallItems.some((i) => i.kind === 'window')
+  const deselect = () => setSelection(null)
 
   return (
     <div className="app">
-      <aside className="sidebar">
-        <h1>3D 인테리어 플래너</h1>
-        <div className="side-tabs" role="tablist">
-          <button role="tab" aria-selected={sideTab === 'build'} className={sideTab === 'build' ? 'active' : ''} onClick={() => setSideTab('build')}>
-            꾸미기
-          </button>
-          <button role="tab" aria-selected={sideTab === 'check'} className={sideTab === 'check' ? 'active' : ''} onClick={() => setSideTab('check')}>
-            햇빛·검사{errorCount > 0 && <span className="count">{errorCount}</span>}
-          </button>
-          <button role="tab" aria-selected={sideTab === 'more'} className={sideTab === 'more' ? 'active' : ''} onClick={() => setSideTab('more')}>
-            메모·추천
-          </button>
-        </div>
+      <Header mode={mode} project={project} onMode={setMode} onLoad={replaceProject} onReset={() => replaceProject(DEFAULT_PROJECT)} onToast={showToast} />
 
-        {sideTab === 'build' && (
-          <>
+      <div className="body">
+        <Rail section={section} badges={{ check: errorCount, notes: notes.length }} onSection={setSection} />
+
+        <aside className="panel">
+          {section === 'rooms' && (
             <RoomsPanel
               key={sceneKey}
               rooms={rooms}
@@ -518,51 +540,42 @@ export default function App() {
               onDelete={deleteRoom}
               onWallHeight={(wallHeight) => commit({ ...latest.current, wallHeight })}
             />
-            <LibraryPanel
-              targetLabel={selectedRoom ? selectedRoom.name : rooms.length > 1 ? `모든 방 / 놓을 때는 ${target.name}` : rooms[0].name}
+          )}
+          {section === 'furniture' && <FurniturePanel thumbs={thumbs} targetName={target.name} onAdd={addFurniture} />}
+          {section === 'finish' && (
+            <FinishPanel
+              targetLabel={selectedRoom ? selectedRoom.name : rooms.length > 1 ? '모든 방' : rooms[0].name}
               wall={finishSource.wall}
               floor={finishSource.floor}
-              wiring={tool === 'wire'}
-              onAddFurniture={addFurniture}
-              onAddWallItem={addWallItem}
-              onToggleWire={() => changeTool(tool === 'wire' ? 'select' : 'wire')}
-              onApplyFinish={applyFinish}
+              onApply={applyFinish}
             />
-            <FilePanel project={project} onLoad={replaceProject} onReset={() => replaceProject(DEFAULT_PROJECT)} />
-            <details className="panel help">
-              <summary>조작법</summary>
-              <ul>
-                <li>가구 드래그: 이동 (가까운 정렬 위치에 붙고 안내선 표시)</li>
-                <li>방향키: 1cm 이동 · Shift+방향키: 10cm</li>
-                <li>R: 회전 · Delete: 삭제 · Esc: 선택 해제</li>
-                <li>V: 보기 전환 (전체 → 가구 → 전기 → 구조)</li>
-                <li>빈 곳 왼쪽 드래그: 시점 이동</li>
-                <li>오른쪽 드래그 (또는 Ctrl+드래그): 시점 회전</li>
-                <li>휠: 확대/축소</li>
-                <li>2D 평면도에서 방·문·창문·콘센트·메모를 끌어 위치 변경</li>
-                <li>전선 그리기: 차례로 클릭 → Enter 또는 더블클릭으로 끝</li>
-              </ul>
-            </details>
-          </>
-        )}
-
-        {sideTab === 'check' && (
-          <>
+          )}
+          {section === 'openings' && <OpeningsPanel targetName={target.name} onAdd={addWallItem} />}
+          {section === 'electric' && (
+            <ElectricPanel
+              thumbs={thumbs}
+              wires={wires}
+              wiring={tool === 'wire'}
+              onAddWallItem={addWallItem}
+              onAddFurniture={addFurniture}
+              onToggleWire={() => changeTool(tool === 'wire' ? 'select' : 'wire')}
+            />
+          )}
+          {section === 'sun' && (
             <SunPanel
               lighting={lighting}
               north={project.north}
               rooms={rooms}
               patches={patches}
-              hasWindows={wallItems.some((i) => i.kind === 'window')}
+              hasWindows={hasWindows}
               onChange={(patch) => setLighting((l) => ({ ...l, ...patch }))}
+              onStep={stepTime}
               onNorth={(north) => commit({ ...latest.current, north })}
+              onAddWindow={() => addWallItem(WALL_ITEM_PRESETS.find((p) => p.id === 'window-large')!)}
             />
-            <DrcPanel issues={issues} onPick={pickIssue} />
-          </>
-        )}
-
-        {sideTab === 'more' && (
-          <>
+          )}
+          {section === 'check' && <DrcPanel issues={issues} onPick={pickIssue} />}
+          {section === 'notes' && (
             <NotesPanel
               notes={notes}
               selection={selection}
@@ -577,102 +590,119 @@ export default function App() {
                 setNotesVisible(true)
               }}
             />
-            <RecommendPanel pyeong={toPyeong(unionArea(rooms.map(roomRect)))} roomCount={rooms.length} />
-          </>
-        )}
-      </aside>
+          )}
+          {section === 'ideas' && <RecommendPanel pyeong={toPyeong(unionArea(rooms.map(roomRect)))} roomCount={rooms.length} />}
+        </aside>
 
-      <main className={`viewport mode-${mode}`}>
-        <ViewBar
-          mode={mode}
-          layer={layer}
-          tool={tool}
-          onMode={setMode}
-          onView={(view: ViewName) => setViewRequest({ view, nonce: Date.now() })}
-          onLayer={setLayer}
-          onTool={changeTool}
-        />
-        {tool !== 'select' && (
-          <div className="toolhint" role="status">
-            {tool === 'wire'
-              ? `전선 그리기: 바닥을 차례로 눌러 점을 찍으세요${draft ? ` (${draft.length}개)` : ''} · Enter 또는 더블클릭으로 끝 · Esc 취소`
-              : '메모 찍기: 메모를 남길 자리를 누르세요 · Esc 취소'}
-            {tool === 'wire' && draft && draft.length >= 2 && (
-              <button className="small" onClick={finishWire}>
-                완료
-              </button>
+        <main className="stage">
+          <div className="views">
+            {mode !== '3d' && (
+              <div className="view">
+                <Plan2D
+                  project={project}
+                  pieces={pieces}
+                  selection={selection}
+                  guides={guides}
+                  issues={shownIssues}
+                  patches={patches}
+                  visible={visible}
+                  tool={tool}
+                  draft={draft}
+                  onSelect={setSelection}
+                  onPlanClick={planClick}
+                  onFinishWire={finishWire}
+                  onMove={moveOnPlan}
+                  onDragEnd={() => setGuides([])}
+                />
+                {/* 평면도의 나침반은 고정: 북쪽이 가리키는 방향만 보여 준다 */}
+                <Compass rotation={-project.north} />
+              </div>
+            )}
+            {mode !== '2d' && (
+              <div className="view">
+                <Scene3D
+                  project={project}
+                  pieces={pieces}
+                  selection={selection}
+                  guides={guides}
+                  issues={shownIssues}
+                  visible={visible}
+                  tool={tool}
+                  draft={draft}
+                  lighting={lighting}
+                  sun={sun}
+                  patches={patches}
+                  viewRequest={viewRequest}
+                  cameraRef={cameraRef}
+                  onSelect={setSelection}
+                  onFloorClick={(roomId, x, y) => (tool === 'select' ? setSelection({ type: 'room', id: roomId }) : planClick(x, y))}
+                  onMoveFurniture={moveFurniture}
+                  onDragEnd={() => setGuides([])}
+                />
+              </div>
             )}
           </div>
-        )}
-        <div className="views">
-          {mode !== '3d' && (
-            <div className="view">
-              <Plan2D
-                project={project}
-                pieces={pieces}
-                selection={selection}
-                guides={guides}
-                issues={shownIssues}
-                patches={patches}
-                visible={visible}
-                tool={tool}
-                draft={draft}
-                onSelect={setSelection}
-                onPlanClick={planClick}
-                onFinishWire={finishWire}
-                onMove={moveOnPlan}
-                onDragEnd={() => setGuides([])}
-              />
-            </div>
-          )}
-          {mode !== '2d' && (
-            <div className="view">
-              <Scene3D
-                project={project}
-                pieces={pieces}
-                selection={selection}
-                guides={guides}
-                issues={shownIssues}
-                visible={visible}
-                tool={tool}
-                draft={draft}
-                lighting={lighting}
-                sun={sun}
-                viewRequest={viewRequest}
-                cameraRef={cameraRef}
-                onSelect={setSelection}
-                onFloorClick={(roomId, x, y) => (tool === 'select' ? setSelection({ type: 'room', id: roomId }) : planClick(x, y))}
-                onMoveFurniture={moveFurniture}
-                onDragEnd={() => setGuides([])}
-              />
-            </div>
-          )}
-        </div>
 
-        {/* 선택한 것의 정보 카드 (화면 오른쪽 아래) */}
-        {selectedFurniture && selectedItem && (
-          <SelectionPanel
-            key={selectedFurniture.id}
-            instance={selectedFurniture}
-            item={selectedItem}
-            onRotate={rotateSelected}
-            onDuplicate={duplicateSelected}
-            onDelete={deleteSelected}
-            onRecolor={recolorSelected}
-          />
-        )}
-        {selectedWallItem && wallItemRoom && (
-          <WallItemCard
-            key={selectedWallItem.id}
-            item={selectedWallItem}
-            room={wallItemRoom}
-            onChange={(patch) => changeWallItem(selectedWallItem.id, patch)}
-            onDelete={deleteSelected}
-          />
-        )}
-        {selectedWire && <WireCard wire={selectedWire} onDelete={deleteSelected} />}
-        {selectedNote && <NoteCard key={selectedNote.id} note={selectedNote} onChange={(text) => changeNote(selectedNote.id, { text })} onDelete={deleteSelected} />}
-      </main>
+          {/* 화면 위쪽 가운데: 지금 든 도구나 알아둘 점을 알려 주는 띠 */}
+          {tool !== 'select' ? (
+            <div className="notice tool" role="status">
+              {tool === 'wire'
+                ? `전선 그리기 · 바닥을 차례로 눌러 주세요${draft ? ` (${draft.length}개)` : ''} · Enter로 끝, Esc로 취소`
+                : '메모 찍기 · 메모할 자리를 눌러 주세요 · Esc로 취소'}
+              {tool === 'wire' && draft && draft.length >= 2 && (
+                <button className="btn primary sm" onClick={finishWire}>
+                  완료
+                </button>
+              )}
+            </div>
+          ) : lighting.enabled && !lighting.night && !hasWindows ? (
+            <div className="notice" role="status">
+              창문이 없어서 햇빛이 들어오지 않아요
+              <button className="btn primary sm" onClick={() => addWallItem(WALL_ITEM_PRESETS.find((p) => p.id === 'window-large')!)}>
+                남쪽 벽에 창문 달기
+              </button>
+            </div>
+          ) : null}
+
+          <CanvasBar mode={mode} layer={layer} onView={(view: ViewName) => setViewRequest({ view, nonce: Date.now() })} onLayer={setLayer} />
+
+          {/* 선택한 것의 속성 카드 (화면 오른쪽) */}
+          {selectedFurniture && selectedItem && (
+            <SelectionPanel
+              key={selectedFurniture.id}
+              instance={selectedFurniture}
+              item={selectedItem}
+              thumb={thumbs[selectedItem.id]}
+              onRotate={rotateSelected}
+              onDuplicate={duplicateSelected}
+              onDelete={deleteSelected}
+              onClose={deselect}
+              onRecolor={recolorSelected}
+              onToast={showToast}
+            />
+          )}
+          {selectedWallItem && wallItemRoom && (
+            <WallItemCard
+              key={selectedWallItem.id}
+              item={selectedWallItem}
+              room={wallItemRoom}
+              onChange={(patch) => changeWallItem(selectedWallItem.id, patch)}
+              onDelete={deleteSelected}
+              onClose={deselect}
+            />
+          )}
+          {selectedWire && <WireCard wire={selectedWire} onDelete={deleteSelected} onClose={deselect} />}
+          {selectedNote && (
+            <NoteCard key={selectedNote.id} note={selectedNote} onChange={(text) => changeNote(selectedNote.id, { text })} onDelete={deleteSelected} onClose={deselect} />
+          )}
+
+          {toast && (
+            <div className={`toast ${toast.error ? 'error' : ''}`} role="status">
+              {toast.text}
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   )
 }

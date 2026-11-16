@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Icon from '../icons'
 
 const STYLES = ['', '미니멀', '북유럽', '우드톤', '모던', '빈티지', '화이트']
 const SPACES = ['원룸', '거실', '침실', '아파트', '오피스텔']
@@ -20,13 +21,15 @@ export default function RecommendPanel({ pyeong, roomCount }: { pyeong: number; 
   const query = [`${size}평`, space, style, '인테리어'].filter(Boolean).join(' ')
 
   return (
-    <section className="panel">
-      <h2>인테리어 추천 자료</h2>
-      <p className="hint">
-        지금 집은 약 <strong>{size}평</strong>이에요. 같은 평수의 인테리어 자료를 찾아봐요.
-      </p>
+    <>
+      <div className="panel-head">
+        <div>
+          <h2>추천 자료</h2>
+          <p className="sub">지금 집은 약 {size}평이에요</p>
+        </div>
+      </div>
       <div className="fields two">
-        <label>
+        <label className="field">
           공간
           <select value={space} onChange={(e) => setSpace(e.target.value)}>
             {SPACES.map((s) => (
@@ -34,7 +37,7 @@ export default function RecommendPanel({ pyeong, roomCount }: { pyeong: number; 
             ))}
           </select>
         </label>
-        <label>
+        <label className="field">
           분위기
           <select value={style} onChange={(e) => setStyle(e.target.value)}>
             {STYLES.map((s) => (
@@ -45,19 +48,22 @@ export default function RecommendPanel({ pyeong, roomCount }: { pyeong: number; 
           </select>
         </label>
       </div>
-      <p className="query">검색어: “{query}”</p>
-      <ul className="links">
+      <p className="query">
+        <Icon name="search" size={15} />
+        {query}
+      </p>
+      <ul className="rows">
         {SITES.map((site) => (
           <li key={site.name}>
-            <a href={site.url(encodeURIComponent(query))} target="_blank" rel="noreferrer">
+            <a className="row link" href={site.url(encodeURIComponent(query))} target="_blank" rel="noreferrer">
               <strong>{site.name}</strong>
-              <span>{site.note}</span>
-              <span aria-hidden="true">↗</span>
+              <span className="muted">{site.note}</span>
+              <Icon name="external" size={15} />
             </a>
           </li>
         ))}
       </ul>
-      <p className="hint">누르면 새 창에서 검색 결과가 열려요.</p>
-    </section>
+      <p className="hint">같은 평수의 인테리어 자료를 찾는 검색 결과가 새 창으로 열려요.</p>
+    </>
   )
 }

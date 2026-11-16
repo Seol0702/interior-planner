@@ -28,8 +28,9 @@ export function sunDirection(time: number, season: Season, north: number): Sun {
   const east = -Math.cos(dec) * Math.sin(hour)
   const northward = Math.cos(lat) * Math.sin(dec) - Math.sin(lat) * Math.cos(dec) * Math.cos(hour)
   const up = Math.sin(lat) * Math.sin(dec) + Math.cos(lat) * Math.cos(dec) * Math.cos(hour)
-  // 평면도에서 북쪽이 어느 방향인지에 맞춰 돌린다 (north = 0이면 위쪽이 북)
-  const a = rad(north)
+  // 평면도에서 북쪽이 어느 방향인지에 맞춰 돌린다.
+  // north = 평면도 위쪽이 가리키는 방위 (0 = 북, 90 = 동). 위쪽이 동이면 북은 왼쪽이므로 반대로 돌린다
+  const a = rad(-north)
   const nx = Math.sin(a)
   const nz = -Math.cos(a)
   return { x: east * -nz + northward * nx, y: up, z: east * nx + northward * nz, elevation: Math.asin(Math.max(-1, Math.min(1, up))) }
@@ -62,7 +63,15 @@ function clipToRect(polygon: Point[], r: Rect): Point[] {
 const polygonArea = (pts: Point[]) =>
   Math.abs(pts.reduce((sum, p, i) => sum + p.x * pts[(i + 1) % pts.length].y - pts[(i + 1) % pts.length].x * p.y, 0)) / 2
 
-export type SunPatch = { roomId: string; polygon: Point[]; area: number } // area: ㎡
+/** 빛줄기의 꼭짓점: 평면 위치 + 높이 */
+export type BeamPoint = { x: number; y: number; h: number }
+
+export type SunPatch = {
+  roomId: string
+  polygon: Point[] // 바닥에 햇빛이 닿는 자리
+  area: number // ㎡
+  beam: { near: BeamPoint[]; far: BeamPoint[] } // 창문 네 귀퉁이 → 빛이 닿는 네 점 (3D 빛줄기용)
+}
 
 /**
  * 창문마다 "바닥에 햇빛이 떨어지는 자리"를 구한다.
@@ -87,8 +96,24 @@ export function sunPatches(project: Project, pieces: WallPiece[], sun: Sun): Sun
       return span.horizontal ? { x: along + s.x, y: span.line + s.y } : { x: span.line + s.x, y: along + s.y }
     }
     const top = item.sill + item.height
-    const polygon = clipToRect([at(span.a, item.sill), at(span.b, item.sill), at(span.b, top), at(span.a, top)], roomRect(room))
-    if (polygon.length >= 3) patches.push({ roomId: room.id, polygon, area: polygonArea(polygon) / 1e6 })
+    const rect = roomRect(room)
+    const corners: [number, number][] = [[span.a, item.sill], [span.b, item.sill], [span.b, top], [span.a, top]]
+    const polygon = clipToRect(corners.map(([along, h]) => at(along, h)), rect)
+    if (polygon.length < 3) continue
+
+    // 빛줄기: 창문 귀퉁이에서 바닥까지 가는 길. 도중에 맞은편 벽에 닿으면 거기서 멈춘다
+    const near: BeamPoint[] = corners.map(([along, h]) => ({ ...at(along, 0), h }))
+    const far: BeamPoint[] = near.map((p) => {
+      const floor = { x: p.x + shift(p.h).x, y: p.y + shift(p.h).y }
+      let t = 1 // 0 = 창문, 1 = 바닥
+      if (floor.x < rect.x) t = Math.min(t, (rect.x - p.x) / (floor.x - p.x))
+      if (floor.x > rect.x + rect.w) t = Math.min(t, (rect.x + rect.w - p.x) / (floor.x - p.x))
+      if (floor.y < rect.y) t = Math.min(t, (rect.y - p.y) / (floor.y - p.y))
+      if (floor.y > rect.y + rect.d) t = Math.min(t, (rect.y + rect.d - p.y) / (floor.y - p.y))
+      t = Math.max(0, t)
+      return { x: p.x + (floor.x - p.x) * t, y: p.y + (floor.y - p.y) * t, h: p.h * (1 - t) }
+    })
+    patches.push({ roomId: room.id, polygon, area: polygonArea(polygon) / 1e6, beam: { near, far } })
   }
   return patches
 }
