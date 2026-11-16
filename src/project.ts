@@ -1,10 +1,14 @@
 // 프로젝트 저장·불러오기 (JSON 파일 + 브라우저 자동 저장)
-import type { FurnitureInstance, Project, Room } from './types'
+import type { Finish, FurnitureInstance, PatternId, Project, RoomShape } from './types'
 import { findLibraryItem } from './library'
+import { ALL_PATTERNS, DEFAULT_FLOOR, DEFAULT_WALL } from './finishes'
+import { isHex } from './colors'
+import { newId } from './plan'
 
 export const DEFAULT_PROJECT: Project = {
-  version: 1,
-  room: { width: 4000, depth: 3500, height: 2400 },
+  version: 2,
+  wallHeight: 2400,
+  rooms: [{ id: 'room-1', name: '거실', x: 0, y: 0, width: 4000, depth: 3500, wall: DEFAULT_WALL, floor: DEFAULT_FLOOR }],
   furniture: [],
 }
 
@@ -12,6 +16,37 @@ const STORAGE_KEY = 'interior-planner:project'
 
 /** 프로젝트를 보기 좋은 JSON 글자로 바꾸기 */
 export const toJson = (project: Project) => JSON.stringify(project, null, 2)
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** 마감재 정보가 이상하면 기본값으로 대신한다 */
+function parseFinish(v: unknown, fallback: Finish): Finish {
+  if (!isObject(v) || !ALL_PATTERNS.includes(v.pattern as PatternId) || !isHex(v.color)) return fallback
+  return {
+    pattern: v.pattern as PatternId,
+    color: v.color,
+    accent: isHex(v.accent) ? v.accent : fallback.accent,
+    size: isNum(v.size) && v.size >= 20 && v.size <= 5000 ? v.size : fallback.size,
+  }
+}
+
+function parseFurniture(list: unknown): FurnitureInstance[] {
+  if (!Array.isArray(list)) throw new Error('가구 목록이 잘못됐어요')
+  const result: FurnitureInstance[] = []
+  for (const f of list) {
+    if (!isObject(f) || typeof f.libraryId !== 'string' || !isNum(f.x) || !isNum(f.y)) continue
+    if (!findLibraryItem(f.libraryId)) continue // 모르는 가구는 건너뜀
+    const rotation = isNum(f.rotation) ? (((Math.round(f.rotation / 90) * 90) % 360) + 360) % 360 : 0
+    const inst: FurnitureInstance = { id: typeof f.id === 'string' ? f.id : newId(), libraryId: f.libraryId, x: f.x, y: f.y, rotation }
+    if (isHex(f.color)) inst.color = f.color
+    if (isHex(f.accent)) inst.accent = f.accent
+    result.push(inst)
+  }
+  return result
+}
+
+const validSize = (v: unknown): v is number => isNum(v) && v >= 500 && v <= 50000
 
 /**
  * JSON 글자 → 프로젝트. 모양이 이상하면 오류를 던진다.
@@ -24,29 +59,45 @@ export function parseProject(text: string): Project {
   } catch {
     throw new Error('JSON 형식이 아닌 파일이에요')
   }
-  if (!isObject(data) || data.version !== 1) throw new Error('이 프로그램의 저장 파일이 아니에요')
+  if (!isObject(data)) throw new Error('이 프로그램의 저장 파일이 아니에요')
 
-  const room = data.room
-  if (!isObject(room) || !isNum(room.width) || !isNum(room.depth) || !isNum(room.height)) {
-    throw new Error('방 크기 정보가 잘못됐어요')
+  // 예전(버전 1) 저장 파일: 방 하나짜리 → 새 형식으로 바꿔서 연다
+  if (data.version === 1) {
+    const room = data.room
+    if (!isObject(room) || !validSize(room.width) || !validSize(room.depth) || !validSize(room.height)) {
+      throw new Error('방 크기 정보가 잘못됐어요')
+    }
+    return {
+      version: 2,
+      wallHeight: room.height,
+      rooms: [{ ...DEFAULT_PROJECT.rooms[0], width: room.width, depth: room.depth }],
+      furniture: parseFurniture(data.furniture),
+    }
   }
-  if (!Array.isArray(data.furniture)) throw new Error('가구 목록이 잘못됐어요')
 
-  const furniture: FurnitureInstance[] = data.furniture
-    .filter(
-      (f): f is FurnitureInstance =>
-        isObject(f) &&
-        typeof f.id === 'string' &&
-        typeof f.libraryId === 'string' &&
-        isNum(f.x) &&
-        isNum(f.y) &&
-        isNum(f.rotation) &&
-        findLibraryItem(f.libraryId) !== undefined, // 모르는 가구는 건너뜀
-    )
-    .map(({ id, libraryId, x, y, rotation }) => ({ id, libraryId, x, y, rotation }))
-
-  const cleanRoom: Room = { width: room.width, depth: room.depth, height: room.height }
-  return { version: 1, room: cleanRoom, furniture }
+  if (data.version !== 2) throw new Error('이 프로그램의 저장 파일이 아니에요')
+  if (!Array.isArray(data.rooms)) throw new Error('방 정보가 잘못됐어요')
+  const rooms: RoomShape[] = []
+  for (const r of data.rooms) {
+    if (!isObject(r) || !isNum(r.x) || !isNum(r.y) || !validSize(r.width) || !validSize(r.depth)) continue
+    rooms.push({
+      id: typeof r.id === 'string' ? r.id : newId(),
+      name: typeof r.name === 'string' && r.name.trim() ? r.name.slice(0, 20) : `방 ${rooms.length + 1}`,
+      x: r.x,
+      y: r.y,
+      width: r.width,
+      depth: r.depth,
+      wall: parseFinish(r.wall, DEFAULT_WALL),
+      floor: parseFinish(r.floor, DEFAULT_FLOOR),
+    })
+  }
+  if (rooms.length === 0) throw new Error('방 정보가 잘못됐어요')
+  return {
+    version: 2,
+    wallHeight: isNum(data.wallHeight) && data.wallHeight >= 1500 && data.wallHeight <= 6000 ? data.wallHeight : 2400,
+    rooms,
+    furniture: parseFurniture(data.furniture),
+  }
 }
 
 /** 프로젝트를 .json 파일로 내려받기 */
@@ -78,7 +129,3 @@ export function loadFromBrowser(): Project {
     return DEFAULT_PROJECT
   }
 }
-
-const isObject = (v: unknown): v is Record<string, unknown> =>
-  typeof v === 'object' && v !== null && !Array.isArray(v)
-const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
