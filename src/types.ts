@@ -1,5 +1,6 @@
 // 프로그램 전체에서 쓰는 "데이터 모양" 정의.
 // 길이는 내부적으로 전부 mm(밀리미터)로 저장한다. (화면에 보여줄 때만 m·cm로 바꿈)
+import type { Site } from './site'
 
 /** 무늬 종류 */
 export type PatternId = 'solid' | 'stripe' | 'check' | 'dot' | 'brick' | 'tile' | 'plank'
@@ -141,6 +142,7 @@ export type Project = {
   furniture: FurnitureInstance[]
   wires: Wire[]
   notes: Note[]
+  site?: Site // 집의 실제 위치 (창밖 풍경용, 정했을 때만)
 }
 
 /** 지금 선택된 것 */

@@ -14,7 +14,12 @@ import { daylight, sunDirection, sunPatches } from './sun'
 import { WALL_ITEM_PRESETS, type WallItemPreset } from './structures'
 import { furnitureThumbnails } from './thumbnails'
 import { snap, toPyeong } from './units'
-import Scene3D, { type Visible } from './components/Scene3D'
+import Scene3D, { type Outside, type Visible, type WalkState } from './components/Scene3D'
+import type { WalkAction, WalkView } from './components/WalkControls'
+import WalkBar from './components/WalkBar'
+import SitePanel from './components/SitePanel'
+import { useSurroundings } from './useSurroundings'
+import { DEFAULT_BODY_HEIGHT, bodySize } from './walk'
 import Plan2D from './components/Plan2D'
 import Header from './components/Header'
 import Rail, { type Section } from './components/Rail'
@@ -32,6 +37,18 @@ import RecommendPanel from './components/RecommendPanel'
 import SelectionPanel from './components/SelectionPanel'
 import { NoteCard, WallItemCard, WireCard } from './components/ItemCard'
 import type { ViewRequest } from './components/CameraRig'
+
+const BODY_KEY = 'interior-planner:body-height'
+
+/** 걷는 사람의 키: 예전에 바꿔 둔 값이 있으면 그것, 없으면 170cm */
+function loadBodyHeight() {
+  try {
+    const v = Number(localStorage.getItem(BODY_KEY))
+    return v >= 1000 && v <= 2200 ? v : DEFAULT_BODY_HEIGHT
+  } catch {
+    return DEFAULT_BODY_HEIGHT
+  }
+}
 
 /** 모든 가구를 (바뀐) 방 안으로 다시 맞춰 넣기 */
 const refit = (furniture: FurnitureInstance[], rooms: RoomShape[]) => {
@@ -82,6 +99,9 @@ export default function App() {
   const [notesExpanded, setNotesExpanded] = useState(false)
   const [lighting, setLighting] = useState<Lighting>({ enabled: false, time: 14, season: 'equinox', night: false, lamps: false })
   const cameraRef = useRef<THREE.Camera | null>(null)
+  const [walkView, setWalkView] = useState<WalkView | null>(null) // 걷기 모드 (null = 꺼짐)
+  const [bodyHeight, setBodyHeight] = useState(loadBodyHeight) // 걷는 사람의 키 (mm)
+  const walkInput = useRef(new Set<WalkAction>()) // 지금 누르고 있는 걷기 단추들
 
   // 마우스를 빠르게 움직이면 화면이 다시 그려지기 전에 다음 이벤트가 올 수 있다.
   // 그래서 "가장 최신 프로젝트"를 ref에도 따로 들고 있는다.
@@ -123,6 +143,15 @@ export default function App() {
     () => (lighting.enabled && !lighting.night ? sunPatches(project, pieces, sun) : []),
     [lighting.enabled, lighting.night, project, pieces, sun],
   )
+  // 창밖 풍경: 집 위치가 정해져 있으면 주변 건물·위성사진을 받아 온다
+  const houseBounds = bounds(rooms)
+  const surroundings = useSurroundings(project.site, Math.hypot(houseBounds.w, houseBounds.d) / 2000 + 2)
+  const outside: Outside | null =
+    project.site?.show && (surroundings.buildings.length > 0 || surroundings.ground)
+      ? { buildings: surroundings.buildings, ground: surroundings.ground, floor: project.site.floor }
+      : null
+  const walk: WalkState | null = walkView ? { view: walkView, body: bodySize(bodyHeight) } : null
+
   const visible: Visible = { ...layerFlags(layer), notes: notesVisible, expandNotes: notesExpanded }
   const shownIssues = layer === 'all' ? issues : []
 
@@ -510,6 +539,30 @@ export default function App() {
     setViewRequest({ view: 'iso', nonce: Date.now() }) // 새 집 전체가 보이게 시점을 맞춘다
   }
 
+  // ───────── 걷기 모드 ─────────
+
+  const startWalk = () => {
+    if (mode === '2d') setMode('3d')
+    changeTool('select')
+    setSelection(null)
+    setGuides([])
+    setWalkView((v) => v ?? 'first')
+  }
+
+  const exitWalk = () => {
+    setWalkView(null)
+    setViewRequest({ view: 'iso', nonce: Date.now() }) // 다시 집 전체가 보이게
+  }
+
+  const changeBodyHeight = (height: number) => {
+    setBodyHeight(height)
+    try {
+      localStorage.setItem(BODY_KEY, String(height))
+    } catch {
+      // 저장이 안 돼도 이번에는 그대로 쓴다
+    }
+  }
+
   // ───────── 단축키 ─────────
 
   useEffect(() => {
@@ -518,6 +571,12 @@ export default function App() {
       const el = e.target as HTMLElement
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return
       if (e.ctrlKey || e.metaKey || e.altKey) return
+      // 걷기 중에는 걷기용 키만 (걷기·둘러보기 키는 WalkControls가 처리)
+      if (walkView) {
+        if (e.code === 'Escape') exitWalk()
+        if (e.code === 'KeyC') setWalkView(walkView === 'first' ? 'third' : 'first')
+        return
+      }
       const step = e.shiftKey ? 100 : 10 // 방향키: 1cm, Shift와 함께: 10cm
       // e.code는 한/영 입력 상태와 상관없이 "자판 위치"로 판단 (한글 모드에서 R = ㄱ)
       switch (e.code) {
@@ -556,7 +615,10 @@ export default function App() {
 
   return (
     <div className="app">
-      <Header mode={mode} project={project} onMode={setMode} onLoad={replaceProject} onReset={() => replaceProject(DEFAULT_PROJECT)} onToast={showToast} />
+      <Header mode={mode} project={project} onMode={(m) => {
+          if (m === '2d' && walkView) setWalkView(null) // 평면도만 보면 걷기를 끝낸다
+          setMode(m)
+        }} onLoad={replaceProject} onReset={() => replaceProject(DEFAULT_PROJECT)} onToast={showToast} />
 
       <div className="body">
         <Rail section={section} badges={{ check: errorCount, notes: notes.length }} onSection={setSection} />
@@ -606,6 +668,21 @@ export default function App() {
               onStep={stepTime}
               onNorth={(north) => commit({ ...latest.current, north })}
               onAddWindow={() => addWallItem(WALL_ITEM_PRESETS.find((p) => p.id === 'window-large')!)}
+            />
+          )}
+          {section === 'site' && (
+            <SitePanel
+              site={project.site}
+              north={project.north}
+              rooms={rooms}
+              status={surroundings.status}
+              onChange={(site) => {
+                const { site: _old, ...rest } = latest.current // eslint-disable-line @typescript-eslint/no-unused-vars
+                commit(site ? { ...rest, site } : rest)
+              }}
+              onNorth={(north) => commit({ ...latest.current, north })}
+              onWalk={startWalk}
+              onRetry={surroundings.retry}
             />
           )}
           {section === 'check' && <DrcPanel issues={issues} onPick={pickIssue} />}
@@ -668,6 +745,13 @@ export default function App() {
                   patches={patches}
                   viewRequest={viewRequest}
                   cameraRef={cameraRef}
+                  walk={walk}
+                  walkInput={walkInput}
+                  outside={outside}
+                  onWalkFail={() => {
+                    setWalkView(null)
+                    showToast('설 자리가 없어요. 가구 사이에 몸 폭만큼 빈 바닥이 필요해요', true)
+                  }}
                   onSelect={setSelection}
                   onFloorClick={(roomId, x, y) => (tool === 'select' ? setSelection({ type: 'room', id: roomId }) : planClick(x, y))}
                   onMoveFurniture={moveFurniture}
@@ -679,7 +763,7 @@ export default function App() {
           </div>
 
           {/* 화면 위쪽 가운데: 지금 든 도구나 알아둘 점을 알려 주는 띠 */}
-          {tool !== 'select' ? (
+          {walkView ? null : tool !== 'select' ? (
             <div className="notice tool" role="status">
               {tool === 'wire'
                 ? `전선 그리기 · 바닥을 차례로 눌러 주세요${draft ? ` (${draft.length}개)` : ''} · Enter로 끝, Esc로 취소`
@@ -699,7 +783,11 @@ export default function App() {
             </div>
           ) : null}
 
-          <CanvasBar mode={mode} layer={layer} onView={(view: ViewName) => setViewRequest({ view, nonce: Date.now() })} onLayer={setLayer} />
+          {walkView ? (
+            <WalkBar view={walkView} bodyHeight={bodyHeight} input={walkInput} onView={setWalkView} onBodyHeight={changeBodyHeight} onExit={exitWalk} />
+          ) : (
+            <CanvasBar mode={mode} layer={layer} onView={(view: ViewName) => setViewRequest({ view, nonce: Date.now() })} onLayer={setLayer} onWalk={startWalk} />
+          )}
 
           {/* 선택한 것의 속성 카드 (화면 오른쪽) */}
           {selectedFurniture && selectedItem && (

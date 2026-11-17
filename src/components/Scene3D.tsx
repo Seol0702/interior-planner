@@ -15,8 +15,18 @@ import FurnitureMesh from './FurnitureMesh'
 import Guides3D from './Guides3D'
 import CameraRig, { type ViewRequest } from './CameraRig'
 import Compass from './Compass'
+import WalkControls, { type WalkAction, type WalkView } from './WalkControls'
+import Surroundings, { type Ground } from './Surroundings'
+import { buildObstacles } from '../walk'
+import { STOREY, type Building } from '../site'
 
 export type Visible = { walls: boolean; furniture: boolean; electric: boolean; notes: boolean; expandNotes: boolean }
+
+/** 걷기 모드 설정 (null이면 평소 화면) */
+export type WalkState = { view: WalkView; body: { height: number; eye: number; width: number } }
+
+/** 창밖 풍경 재료 */
+export type Outside = { buildings: Building[]; ground: Ground | null; floor: number }
 
 type Props = {
   project: Project
@@ -32,6 +42,10 @@ type Props = {
   patches: SunPatch[] // 창문으로 햇빛이 드는 자리
   viewRequest: ViewRequest | null
   cameraRef: RefObject<THREE.Camera | null>
+  walk: WalkState | null
+  walkInput: RefObject<Set<WalkAction>>
+  outside: Outside | null
+  onWalkFail: () => void
   onSelect: (selection: Selection) => void
   onFloorClick: (roomId: string, x: number, y: number) => void
   onMoveFurniture: (id: string, x: number, y: number) => void
@@ -41,7 +55,12 @@ type Props = {
 
 /** 3D 화면 전체 */
 export default function Scene3D(props: Props) {
-  const { project, pieces, selection, guides, issues, visible, tool, draft, lighting, sun, patches, viewRequest, cameraRef } = props
+  const { project, pieces, selection, guides, issues, visible, tool, draft, lighting, sun, patches, viewRequest, cameraRef, walk, walkInput, outside } = props
+  const walking = walk !== null
+  const interactive = tool === 'select' && !walking
+  // 걷는 사람이 부딪히는 것들 (걷기 모드일 때만 계산)
+  const obstacles = useMemo(() => (walking ? buildObstacles(project, pieces) : null), [walking, project, pieces])
+  const b = useMemo(() => bounds(project.rooms), [project.rooms])
   const compass = useRef<HTMLDivElement>(null)
   const { onSelect, onFloorClick, onMoveFurniture, onMoveWallItem, onDragEnd } = props
   // 처음 켰을 때의 카메라 자세 (한 번만 계산)
@@ -66,7 +85,7 @@ export default function Scene3D(props: Props) {
       })
     }
   }
-  for (const issue of issues) {
+  for (const issue of walking ? [] : issues) {
     anchors.push({
       id: `issue:${issue.id}`,
       pos: [mm(issue.x), 0.05, mm(issue.y)],
@@ -79,7 +98,7 @@ export default function Scene3D(props: Props) {
   }
   const picked = selection?.type === 'furniture' ? project.furniture.find((f) => f.id === selection.id) : undefined
   const pickedItem = picked && resolveItem(picked)
-  if (picked && pickedItem) {
+  if (picked && pickedItem && !walking) {
     const top = pickedItem.mount === 'ceiling' ? project.wallHeight : pickedItem.height
     anchors.push({ id: 'tag', pos: [mm(picked.x), mm(top) + 0.25, mm(picked.y)], node: <div className="tag">{pickedItem.name}</div> })
   }
@@ -89,14 +108,24 @@ export default function Scene3D(props: Props) {
     {/* onPointerMissed: 아무것도 없는 곳을 클릭하면 선택 해제 */}
     <Canvas
       shadows
-      camera={{ position: posePosition(pose), fov: 50, near: 0.05, far: 300 }}
+      camera={{ position: posePosition(pose), fov: 50, near: 0.05, far: 2000 }}
       onCreated={({ camera }) => {
         cameraRef.current = camera
       }}
-      onPointerMissed={() => tool === 'select' && onSelect(null)}
+      onPointerMissed={() => interactive && onSelect(null)}
     >
       <Lights project={project} lighting={lighting} sun={sun} />
-      {lighting.enabled && !lighting.night && <SunSky project={project} sun={sun} patches={patches} />}
+      {lighting.enabled && !lighting.night && <SunSky project={project} sun={sun} patches={patches} ground={!outside} />}
+      {outside && (
+        <Surroundings
+          buildings={outside.buildings}
+          ground={outside.ground}
+          groundY={-(outside.floor - 1) * STOREY}
+          north={project.north}
+          center={[mm(b.cx), mm(b.cy)]}
+          house={{ w: mm(b.w), d: mm(b.d) }}
+        />
+      )}
       <CompassSync target={compass} north={project.north} />
 
       <Plan3D
@@ -108,11 +137,12 @@ export default function Scene3D(props: Props) {
         showWalls={visible.walls}
         showElectric={visible.electric}
         shadows={lighting.enabled}
-        interactive={tool === 'select'}
+        interactive={interactive}
+        walking={walking}
         onMoveWallItem={onMoveWallItem}
         onDragEnd={onDragEnd}
         onFloorClick={onFloorClick}
-        onSelect={(s) => tool === 'select' && onSelect(s)}
+        onSelect={(s) => interactive && onSelect(s)}
       />
 
       {project.furniture.map((f) => {
@@ -126,7 +156,7 @@ export default function Scene3D(props: Props) {
             selected={selection?.type === 'furniture' && selection.id === f.id}
             wallHeight={project.wallHeight}
             lit={lampsOn}
-            interactive={tool === 'select'}
+            interactive={interactive}
             onSelect={() => onSelect({ type: 'furniture', id: f.id })}
             onMove={(x, y) => onMoveFurniture(f.id, x, y)}
             onDragEnd={onDragEnd}
@@ -161,9 +191,20 @@ export default function Scene3D(props: Props) {
 
       <Projector anchors={anchors} nodes={nodes} />
 
-      <Guides3D guides={guides} />
+      {!walking && <Guides3D guides={guides} />}
 
       {/* 마우스: 왼쪽 드래그 = 시점 이동, 오른쪽 드래그 = 회전, 휠 = 확대/축소 */}
+      {walk && obstacles && (
+        <WalkControls
+          view={walk.view}
+          body={walk.body}
+          obstacles={obstacles}
+          wallHeight={project.wallHeight}
+          input={walkInput}
+          onFail={props.onWalkFail}
+        />
+      )}
+      {!walking && (
       <OrbitControls
         makeDefault
         target={pose.target}
@@ -172,8 +213,9 @@ export default function Scene3D(props: Props) {
         screenSpacePanning={false}
         maxPolarAngle={Math.PI / 2 - 0.05}
         minDistance={0.5}
-        maxDistance={120}
+        maxDistance={outside ? 400 : 120}
       />
+      )}
       <CameraRig request={viewRequest} rooms={project.rooms} />
     </Canvas>
 
@@ -240,7 +282,7 @@ function CompassSync({ target, north }: { target: RefObject<HTMLDivElement | nul
 const BEAM = new THREE.MeshBasicMaterial({ color: '#fff0b3', transparent: true, opacity: 0.2, depthWrite: false, side: THREE.DoubleSide })
 
 /** 바깥 땅(집 그림자가 보이는 곳)과 창문으로 들어오는 빛줄기 */
-function SunSky({ project, sun, patches }: { project: Project; sun: Sun; patches: SunPatch[] }) {
+function SunSky({ project, sun, patches, ground }: { project: Project; sun: Sun; patches: SunPatch[]; ground: boolean }) {
   const b = useMemo(() => bounds(project.rooms), [project.rooms])
   const cx = mm(b.cx)
   const cz = mm(b.cy)
@@ -269,10 +311,12 @@ function SunSky({ project, sun, patches }: { project: Project; sun: Sun; patches
   return (
     <group>
       {/* 바깥 땅: 집 그림자가 해를 따라 움직이는 것이 보인다 */}
-      <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[cx, -0.02, cz]}>
-        <circleGeometry args={[radius * 1.6, 72]} />
-        <meshStandardMaterial color="#d9dee5" roughness={1} />
-      </mesh>
+      {ground && (
+        <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[cx, -0.02, cz]}>
+          <circleGeometry args={[radius * 1.6, 72]} />
+          <meshStandardMaterial color="#d9dee5" roughness={1} />
+        </mesh>
+      )}
       {up && patches.length > 0 && <mesh geometry={beams} material={BEAM} renderOrder={5} />}
     </group>
   )

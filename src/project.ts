@@ -144,13 +144,23 @@ export function parseProject(text: string): Project {
   return {
     version: 3,
     wallHeight: isNum(data.wallHeight) && data.wallHeight >= 1500 && data.wallHeight <= 6000 ? data.wallHeight : 2400,
-    north: isNum(data.north) ? ((Math.round(data.north / 90) * 90) % 360 + 360) % 360 : 0,
+    north: isNum(data.north) ? ((Math.round(data.north) % 360) + 360) % 360 : 0,
     rooms,
     wallItems,
     furniture: parseFurniture(data.furniture),
     wires,
     notes,
+    ...parseSite(data.site),
   }
+}
+
+/** 집 위치 (없거나 이상하면 빼고 연다) */
+function parseSite(v: unknown): { site?: Project['site'] } {
+  if (!isObject(v) || !isNum(v.lat) || !isNum(v.lng) || Math.abs(v.lat) > 85 || Math.abs(v.lng) > 180) return {}
+  const floor = isNum(v.floor) ? Math.min(80, Math.max(1, Math.round(v.floor))) : 1
+  const site: NonNullable<Project['site']> = { lat: v.lat, lng: v.lng, floor, show: v.show !== false }
+  if (typeof v.label === 'string' && v.label.trim()) site.label = v.label.slice(0, 120)
+  return { site }
 }
 
 /** 프로젝트를 .json 파일로 내려받기 */

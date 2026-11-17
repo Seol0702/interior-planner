@@ -1,6 +1,6 @@
 import Icon, { type IconName } from '../icons'
 
-export type Section = 'rooms' | 'furniture' | 'finish' | 'openings' | 'electric' | 'sun' | 'check' | 'notes' | 'ideas'
+export type Section = 'rooms' | 'furniture' | 'finish' | 'openings' | 'electric' | 'sun' | 'site' | 'check' | 'notes' | 'ideas'
 
 const ITEMS: { id: Section; name: string; icon: IconName }[] = [
   { id: 'rooms', name: '방', icon: 'rooms' },
@@ -9,6 +9,7 @@ const ITEMS: { id: Section; name: string; icon: IconName }[] = [
   { id: 'openings', name: '문·창문', icon: 'door' },
   { id: 'electric', name: '전기', icon: 'plug' },
   { id: 'sun', name: '햇빛', icon: 'sun' },
+  { id: 'site', name: '창밖', icon: 'map' },
   { id: 'check', name: '검사', icon: 'check' },
   { id: 'notes', name: '메모', icon: 'note' },
   { id: 'ideas', name: '추천', icon: 'idea' },

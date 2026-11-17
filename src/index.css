@@ -1416,6 +1416,207 @@ kbd {
 }
 
 /* ───────── 좁은 화면(휴대폰): 화면이 위, 메뉴와 패널이 아래 ───────── */
+/* ───────── 걷기 모드 ───────── */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .pill {
+    padding: 0 7px;
+  }
+
+  .pill-label {
+    padding: 0 4px 0 5px;
+  }
+}
+
+.walk-pill {
+  margin-left: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.walk-pill:hover {
+  background: var(--accent-dark);
+  color: #fff;
+}
+
+.walk-height input {
+  width: 52px;
+  height: 26px;
+  padding: 0 6px;
+  text-align: right;
+}
+
+.pill.exit {
+  border: 1px solid var(--line);
+  background: rgb(255 255 255 / 0.95);
+  box-shadow: var(--shadow);
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 13px;
+}
+
+.walk-help {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 11;
+  max-width: calc(100% - 170px);
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgb(20 24 33 / 0.72);
+  color: #e8ebf2;
+  font-size: 12px;
+  text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.walk-help b {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 터치 화면에서만 보이는 방향 단추 */
+.walk-pad {
+  position: absolute;
+  left: 14px;
+  bottom: 70px;
+  z-index: 10;
+  display: none;
+  grid-template-columns: repeat(3, 46px);
+  grid-template-rows: repeat(2, 46px);
+  gap: 6px;
+}
+
+@media (max-width: 860px) {
+  .walk-pad {
+    bottom: 128px; /* 좁은 화면에서는 아래 막대가 두 줄이 되므로 그 위로 */
+    grid-template-columns: repeat(3, 42px);
+    grid-template-rows: repeat(2, 42px);
+  }
+}
+
+@media (pointer: coarse) {
+  .walk-pad {
+    display: grid;
+  }
+
+  .walk-help {
+    display: none;
+  }
+}
+
+.pad {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.9);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: 16px;
+  touch-action: none;
+  user-select: none;
+}
+
+.pad:active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pad.up { grid-column: 2; grid-row: 1; }
+.pad.left { grid-column: 1; grid-row: 2; }
+.pad.down { grid-column: 2; grid-row: 2; }
+.pad.right { grid-column: 3; grid-row: 2; }
+
+/* ───────── 창밖 풍경 (지도) ───────── */
+.site-search {
+  display: flex;
+  gap: 6px;
+}
+
+.site-search input {
+  flex: 1;
+  min-width: 0;
+}
+
+.site-msg {
+  font-size: 12px;
+  color: #15803d;
+}
+
+.site-msg.error {
+  color: #b42318;
+}
+
+.site-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  list-style: none;
+}
+
+.site-results button {
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+}
+
+.site-results button:hover {
+  background: var(--soft);
+}
+
+.site-map {
+  flex: none;
+  height: 240px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  z-index: 0; /* 지도 단추가 다른 창 위로 올라오지 않게 */
+}
+
+.site-label {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.site-status {
+  min-height: 18px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.site-status.ready {
+  color: #15803d;
+}
+
+.site-status.error {
+  color: #b42318;
+}
+
+.site-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 @media (max-width: 860px) {
   .app {
     grid-template-rows: auto minmax(0, 1fr);

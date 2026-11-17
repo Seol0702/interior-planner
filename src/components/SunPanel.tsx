@@ -171,6 +171,7 @@ export default function SunPanel({ lighting, north, rooms, patches, hasWindows, 
             <label className="field">
               평면도 방위
               <select value={north} onChange={(e) => onNorth(Number(e.target.value))}>
+                {!NORTHS.some((n) => n.value === north) && <option value={north}>위쪽이 {north}°</option>}
                 {NORTHS.map((n) => (
                   <option key={n.value} value={n.value}>
                     {n.name}

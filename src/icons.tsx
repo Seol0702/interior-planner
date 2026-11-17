@@ -60,6 +60,26 @@ const PATHS = {
     </>
   ),
   external: <path d="M14 5h5v5 M19 5l-8 8 M11 7H5v12h12v-6" />,
+  walk: (
+    <>
+      <circle cx="13" cy="4.5" r="1.8" />
+      <path d="M10 21l2.5-6 2.5 2.5V21 M12.5 15l-1-5 M11.5 10l-3.5 2.5V15 M11.5 10l2.5-1.5 2 3 2.5 1" />
+    </>
+  ),
+  map: <path d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5z M9 4v13.5 M15 6.5V20" />,
+  eye: (
+    <>
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  person: (
+    <>
+      <circle cx="12" cy="7" r="3.2" />
+      <path d="M5 20.5a7 7 0 0 1 14 0" />
+    </>
+  ),
+  exit: <path d="M14 4h5v16h-5 M10 8l-4 4 4 4 M6 12h10" />,
 } satisfies Record<string, ReactNode>
 
 export type IconName = keyof typeof PATHS

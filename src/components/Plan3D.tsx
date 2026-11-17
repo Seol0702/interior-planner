@@ -18,6 +18,7 @@ type Props = {
   showElectric: boolean // 콘센트 보이기
   shadows: boolean // 햇빛 효과가 켜져 있는가
   interactive: boolean // 선택 도구일 때만 문·창문·콘센트를 끌어서 옮길 수 있다
+  walking?: boolean // 걷기 모드: 천장을 덮고, 벽을 숨기지 않고, 문을 열어 둔다
   onFloorClick: (roomId: string, x: number, y: number) => void
   onSelect: (selection: Selection) => void
   onMoveWallItem: (id: string, along: number, height: number) => void // along: 벽 방향 위치, height: 바닥에서 높이 (mm)
@@ -31,7 +32,7 @@ const SHADOW_ONLY = new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite:
 
 /** 평면도(방들)를 3D로: 바닥 + 벽 + 문·창문·콘센트 */
 export default function Plan3D(props: Props) {
-  const { rooms, pieces, wallItems, wallHeight, selection, showWalls, showElectric, shadows, interactive, onFloorClick, onSelect, onMoveWallItem, onDragEnd } = props
+  const { rooms, pieces, wallItems, wallHeight, selection, showWalls, showElectric, shadows, interactive, walking = false, onFloorClick, onSelect, onMoveWallItem, onDragEnd } = props
   const roomById = useMemo(() => new Map(rooms.map((r) => [r.id, r])), [rooms])
 
   // 문·창문·콘센트가 각각 어느 벽 조각에 붙어 있는지 찾는다
@@ -72,6 +73,7 @@ export default function Plan3D(props: Props) {
             otherFinish={piece.otherRoomId ? roomById.get(piece.otherRoomId)?.wall : undefined}
             holes={attached.filter((a) => a.piece === piece && a.item.kind !== 'outlet')}
             shadows={shadows}
+            cutaway={!walking}
           />
         ))}
 
@@ -82,12 +84,22 @@ export default function Plan3D(props: Props) {
             attached={a}
             selected={selection?.type === 'wallItem' && selection.id === a.item.id}
             interactive={interactive}
+            walking={walking}
             onSelect={() => onSelect({ type: 'wallItem', id: a.item.id })}
             onMove={(along, height) => onMoveWallItem(a.item.id, along, height)}
             onDragEnd={onDragEnd}
           />
         ) : null,
       )}
+
+      {/* 걷기 모드의 천장: 아래(방 안)에서만 보이는 흰 판 */}
+      {walking &&
+        rooms.map((room) => (
+          <mesh key={room.id} rotation={[Math.PI / 2, 0, 0]} position={[mm(room.x + room.width / 2), H, mm(room.y + room.depth / 2)]}>
+            <planeGeometry args={[mm(room.width), mm(room.depth)]} />
+            <meshStandardMaterial color="#f6f5f2" roughness={0.95} />
+          </mesh>
+        ))}
 
       {/* 천장: 보이지 않지만 햇빛을 막는다 → 빛이 창문으로만 들어온다 */}
       {shadows &&
@@ -168,7 +180,7 @@ function Floor({ room, lift, selected, onClick }: FloorProps) {
   )
 }
 
-type WallProps = { piece: WallPiece; height: number; finish: Finish; otherFinish?: Finish; holes: Attached[]; shadows: boolean }
+type WallProps = { piece: WallPiece; height: number; finish: Finish; otherFinish?: Finish; holes: Attached[]; shadows: boolean; cutaway: boolean }
 
 const WALL_TOP = '#deddd9' // 벽 윗면(잘린 단면) 색
 
@@ -176,7 +188,7 @@ const WALL_TOP = '#deddd9' // 벽 윗면(잘린 단면) 색
  * 벽 조각 하나 (문·창문 자리는 구멍이 뚫린다).
  * 바깥벽은 카메라가 벽 바깥쪽에 있으면 숨겨서 방 안이 보이게 한다(컷어웨이).
  */
-function Wall({ piece, height, finish, otherFinish, holes, shadows }: WallProps) {
+function Wall({ piece, height, finish, otherFinish, holes, shadows, cutaway }: WallProps) {
   const ref = useRef<THREE.Mesh>(null)
   const H = mm(height)
   const T = mm(WALL_THICKNESS)
@@ -215,6 +227,10 @@ function Wall({ piece, height, finish, otherFinish, holes, shadows }: WallProps)
   // useFrame: 화면을 다시 그릴 때마다(초당 약 60번) 실행
   useFrame(({ camera }) => {
     if (!ref.current || piece.interior) return
+    if (!cutaway) {
+      ref.current.visible = true
+      return
+    }
     toCamera.subVectors(camera.position, center)
     ref.current.visible = toCamera.dot(outward) < 0
   })
@@ -246,13 +262,14 @@ type WallItemMeshProps = {
   attached: Attached
   selected: boolean
   interactive: boolean
+  walking: boolean
   onSelect: () => void
   onMove: (along: number, height: number) => void
   onDragEnd: () => void
 }
 
 /** 문·창문·콘센트의 3D 모양. 끌면 벽을 따라 옆으로, 위아래로 움직인다 */
-function WallItemMesh({ attached, selected, interactive, onSelect, onMove, onDragEnd }: WallItemMeshProps) {
+function WallItemMesh({ attached, selected, interactive, walking, onSelect, onMove, onDragEnd }: WallItemMeshProps) {
   const { item, span, piece } = attached
   const T = mm(WALL_THICKNESS)
   const w = mm(item.width)
@@ -267,6 +284,9 @@ function WallItemMesh({ attached, selected, interactive, onSelect, onMove, onDra
   const rotation: [number, number, number] = piece.horizontal ? [0, 0, 0] : [0, -Math.PI / 2, 0]
   // 이 물건이 속한 방 안쪽이 z의 어느 쪽인지 (콘센트·문짝을 방 안쪽 면에 붙이기 위해)
   const inward = piece.horizontal ? -span.ny : span.nx
+  // 문: 경첩이 있는 쪽(x의 -1 또는 +1)과 문이 열리는 쪽(z의 -1 또는 +1)
+  const hinge = item.flip ? 1 : -1
+  const swing = item.outward ? -inward : inward
 
   const outline = useMemo(() => new THREE.EdgesGeometry(new THREE.BoxGeometry(w + 0.06, h + 0.06, T + 0.08)), [w, h, T])
 
@@ -276,6 +296,10 @@ function WallItemMesh({ attached, selected, interactive, onSelect, onMove, onDra
   const toCamera = useMemo(() => new THREE.Vector3(), [])
   useFrame(({ camera }) => {
     if (!ref.current || piece.interior || item.kind === 'outlet') return
+    if (walking) {
+      ref.current.visible = true
+      return
+    }
     toCamera.subVectors(camera.position, center)
     ref.current.visible = toCamera.x * piece.nx + toCamera.z * piece.ny < 0
   })
@@ -357,15 +381,17 @@ function WallItemMesh({ attached, selected, interactive, onSelect, onMove, onDra
           <mesh position={[0, h / 2 - f / 2, 0]}><boxGeometry args={[w, f, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
           <mesh position={[-w / 2 + f / 2, 0, 0]}><boxGeometry args={[f, h, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
           <mesh position={[w / 2 - f / 2, 0, 0]}><boxGeometry args={[f, h, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
-          {/* 문짝 (닫힌 모습) + 손잡이 */}
-          <mesh castShadow position={[0, -f / 2, 0]}>
-            <boxGeometry args={[w - 2 * f, h - f, 0.04]} />
-            <meshStandardMaterial color={DOOR} roughness={0.7} />
-          </mesh>
-          <mesh position={[(item.flip ? -1 : 1) * (w / 2 - f - 0.09), -h / 2 + 1.0, 0]}>
-            <boxGeometry args={[0.12, 0.03, 0.12]} />
-            <meshStandardMaterial color="#8f8f94" />
-          </mesh>
+          {/* 문짝 + 손잡이. 평소엔 닫힌 모습, 걷기 모드에선 경첩을 축으로 90° 열린 모습 */}
+          <group position={[hinge * (w / 2 - f), 0, walking ? swing * (T / 2) : 0]} rotation={[0, walking ? Math.asin(swing * hinge) : 0, 0]}>
+            <mesh castShadow position={[-hinge * (w / 2 - f), -f / 2, 0]}>
+              <boxGeometry args={[w - 2 * f, h - f, 0.04]} />
+              <meshStandardMaterial color={DOOR} roughness={0.7} />
+            </mesh>
+            <mesh position={[-hinge * (w - 2 * f - 0.09), -h / 2 + 1.0, 0]}>
+              <boxGeometry args={[0.12, 0.03, 0.12]} />
+              <meshStandardMaterial color="#8f8f94" />
+            </mesh>
+          </group>
         </group>
       )}
 
