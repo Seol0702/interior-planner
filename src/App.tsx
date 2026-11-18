@@ -4,7 +4,7 @@ import type {
   Finish, FurnitureInstance, LayerView, Lighting, Note, Point, Project, RoomShape, Selection, Tool, ViewMode, ViewName, WallItem,
 } from './types'
 import { DEFAULT_PROJECT, loadFromBrowser, saveToBrowser } from './project'
-import { LIBRARY, findLibraryItem, resolveItem } from './library'
+import { LIBRARY, bottomOf, findLibraryItem, resolveItem } from './library'
 import {
   bounds, clampWallItem, contains, edgeLength, footprint, nearestEdge, newId, placeInPlan, roomRect, unionArea, wallItemSpan, wallPieces,
 } from './plan'
@@ -21,6 +21,7 @@ import SitePanel from './components/SitePanel'
 import { useSurroundings } from './useSurroundings'
 import { DEFAULT_BODY_HEIGHT, bodySize } from './walk'
 import { distance, type MeasureState, type P3 } from './measure'
+import { limitMove, rectOf, solidsOf, surfaceUnder } from './collide'
 
 const ISSUES_KEY = 'interior-planner:show-issues'
 import Plan2D from './components/Plan2D'
@@ -393,6 +394,31 @@ export default function App() {
 
   // ───────── 가구 ─────────
 
+  /** 책상 위에 두는 물건이면, 밑에 있는 가구 윗면 높이에 올려 앉힌다 (밑에 아무것도 없으면 바닥) */
+  const seat = (f: FurnitureInstance, p: Project): FurnitureInstance => {
+    const item = resolveItem(f)
+    const lib = findLibraryItem(f.libraryId)
+    if (!item?.onTop || !lib) return f
+    const base = surfaceUnder(p, f)
+    const { base: _old, ...rest } = f // eslint-disable-line @typescript-eslint/no-unused-vars
+    return base === (lib.base ?? 0) ? rest : { ...rest, base } // 원래 높이와 같으면 저장하지 않는다
+  }
+
+  /** 이 가구 위에 올라앉은 물건들 (가구를 옮기면 함께 따라온다) */
+  const ridersOf = (p: Project, id: string) => {
+    const f = p.furniture.find((o) => o.id === id)
+    const item = f && resolveItem(f)
+    if (!f || !item || item.onTop) return []
+    const r = rectOf(f, item)
+    const top = bottomOf(item, p.wallHeight) + item.height
+    return p.furniture
+      .filter((o) => {
+        const it = resolveItem(o)
+        return it?.onTop && o.x >= r.x && o.x <= r.x + r.w && o.y >= r.y && o.y <= r.y + r.d && Math.abs(bottomOf(it, p.wallHeight) - top) < 40
+      })
+      .map((o) => o.id)
+  }
+
   const addFurniture = (libraryId: string) => {
     const p = latest.current
     const item = findLibraryItem(libraryId)
@@ -403,7 +429,7 @@ export default function App() {
       item,
       p.rooms,
     )
-    commit({ ...p, furniture: [...p.furniture, instance] })
+    commit({ ...p, furniture: [...p.furniture, seat(instance, p)] })
     setSelection({ type: 'furniture', id: instance.id })
   }
 
@@ -427,7 +453,8 @@ export default function App() {
     const item = f && resolveItem(f)
     if (!f || !item) return
     const { w, d } = footprint(item, f.rotation)
-    const members = multi.length >= 2 && multi.includes(id) ? multi : [id] // 함께 고른 무리 중 하나를 끌면 무리째
+    // 함께 고른 무리 중 하나를 끌면 무리째, 아니면 그 가구 + 위에 올라앉은 물건(책상 위 컴퓨터 등)
+    const members = multi.length >= 2 && multi.includes(id) ? multi : [id, ...ridersOf(p, id)]
     const others = p.furniture.filter((o) => !members.includes(o.id)).map(boxOf).filter((b): b is Box => b !== null)
     const snapped = smartSnap({ x: wantX, y: wantY, w, d }, others, p.rooms.map(roomRect), p.measures ?? []) // 줄자 선·끝에도 붙는다
     const target = { ...f, x: snapped.x ?? snap(wantX), y: snapped.y ?? snap(wantY) }
@@ -436,14 +463,21 @@ export default function App() {
       setGuides(snapped.guides.filter((g) => (g.axis === 'x' ? moved.dx === target.x - f.x : moved.dy === target.y - f.y)))
       return
     }
-    const placed = placeInPlan(target, item, p.rooms)
-    // 벽에 막혀서 붙으려던 자리에 못 갔으면 그 축의 안내선은 지운다
+    let placed = placeInPlan(target, item, p.rooms)
+    if (!item.onTop) {
+      // 다른 가구를 통과하지 못하게: 막히면 딱 닿는 자리에서 멈춘다
+      const lo = bottomOf(item, p.wallHeight)
+      const lm = limitMove(rectOf(f, item), lo, lo + item.height, placed.x - f.x, placed.y - f.y, solidsOf(p, [id]))
+      placed = placeInPlan({ ...f, x: f.x + lm.dx, y: f.y + lm.dy }, item, p.rooms)
+    }
+    placed = seat(placed, p) // 책상 위 물건은 밑에 있는 가구 윗면으로
+    // 벽·가구에 막혀서 붙으려던 자리에 못 갔으면 그 축의 안내선은 지운다
     setGuides(
       snapped.guides.filter((g) =>
         g.axis === 'x' ? Math.abs(placed.x - target.x) < 1 : Math.abs(placed.y - target.y) < 1,
       ),
     )
-    if (placed.x !== f.x || placed.y !== f.y) {
+    if (placed.x !== f.x || placed.y !== f.y || placed.base !== f.base) {
       commit({ ...p, furniture: p.furniture.map((o) => (o.id === id ? placed : o)) })
     }
   }
@@ -458,15 +492,22 @@ export default function App() {
     const limit = (want: number, got: number) => (want === 0 || Math.sign(got) !== Math.sign(want) ? 0 : Math.abs(got) < Math.abs(want) ? got : want)
     let ex = dx
     let ey = dy
+    const solids = solidsOf(p, ids) // 무리 밖의 가구들
     for (const f of p.furniture) {
       const item = ids.includes(f.id) ? resolveItem(f) : undefined
       if (!item) continue
       const placed = placeInPlan({ ...f, x: f.x + dx, y: f.y + dy }, item, p.rooms)
       ex = limit(ex, placed.x - f.x)
       ey = limit(ey, placed.y - f.y)
+      if (item.onTop) continue // 책상 위 물건은 가구 위로 올라앉으므로 막지 않는다
+      const lo = bottomOf(item, p.wallHeight)
+      const lm = limitMove(rectOf(f, item), lo, lo + item.height, ex, ey, solids) // 다른 가구를 통과하지 못하게
+      ex = limit(ex, lm.dx)
+      ey = limit(ey, lm.dy)
     }
     if (ex !== 0 || ey !== 0) {
-      commit({ ...p, furniture: p.furniture.map((f) => (ids.includes(f.id) ? { ...f, x: f.x + ex, y: f.y + ey } : f)) })
+      const moved = { ...p, furniture: p.furniture.map((f) => (ids.includes(f.id) ? { ...f, x: f.x + ex, y: f.y + ey } : f)) }
+      commit({ ...moved, furniture: moved.furniture.map((f) => (ids.includes(f.id) ? seat(f, moved) : f)) })
     }
     return { dx: ex, dy: ey }
   }
@@ -497,7 +538,7 @@ export default function App() {
     const copies = items.flatMap((f) => {
       const item = resolveItem(f)
       return item ? [placeInPlan({ ...f, id: newId(), x: f.x + offset, y: f.y + offset }, item, p.rooms)] : []
-    })
+    }).map((c) => seat(c, { ...p, furniture: [...p.furniture] }))
     if (copies.length === 0) return
     commit({ ...p, furniture: [...p.furniture, ...copies] })
     selectMany(copies.map((c) => c.id))
@@ -611,7 +652,7 @@ export default function App() {
       shiftGroup(groupIds, dx, dy)
       return
     }
-    changeFurniture(selectedFurniture.id, (f) => ({ ...f, x: f.x + dx, y: f.y + dy }))
+    shiftGroup([selectedFurniture.id, ...ridersOf(latest.current, selectedFurniture.id)], dx, dy) // 벽·가구에 막히면 멈춘다
   }
 
   // ───────── 전선·메모 ─────────

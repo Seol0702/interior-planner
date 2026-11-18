@@ -143,6 +143,7 @@ export type FurnitureLibraryItem = {
   layer: 'furniture' | 'electric' // 어느 보기(레이어)에 속하는지
   mount?: 'ceiling' // 천장에 다는 물건
   base?: number // 바닥에서 띄운 높이 (mm). 책상 위 물건·벽걸이 거울 등
+  onTop?: boolean // 책상·탁자 위에 두는 물건: 옮기면 밑에 있는 가구 윗면에 저절로 올라앉는다
   light?: boolean // 빛을 내는 조명인지
 }
 

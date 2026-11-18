@@ -2,6 +2,7 @@
 // 프로젝트를 훑어보고 "문제가 될 만한 배치"를 목록으로 돌려준다.
 import type { FurnitureInstance, FurnitureLibraryItem, Project, Selection, WallItem } from './types'
 import { bottomOf, isPassable, resolveItem } from './library'
+import { heightsOverlap } from './collide'
 import { findPiece, footprint, wallItemSpan, type Rect, type Span, type WallPiece } from './plan'
 
 export type Issue = {
@@ -87,7 +88,7 @@ export function runChecks(project: Project, pieces: WallPiece[]): Issue[] {
       if (!touches(a.rect, b.rect)) continue
       // 높이가 겹치지 않으면 괜찮다 (책상 위 컴퓨터, 벽걸이 거울 밑 서랍장 등)
       const [a0, b0] = [bottomOf(a.item, project.wallHeight), bottomOf(b.item, project.wallHeight)]
-      if (a0 >= b0 + b.item.height - 1 || b0 >= a0 + a.item.height - 1) continue
+      if (!heightsOverlap(a0, a0 + a.item.height, b0, b0 + b.item.height)) continue // 살짝 닿는 정도(3cm 이하)는 괜찮다
       issues.push({
         id: `overlap:${a.f.id}:${b.f.id}`,
         level: 'error',
