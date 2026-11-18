@@ -154,6 +154,77 @@ const builders: Record<ShapeId, Builder> = {
     return parts
   },
 
+  // 컴퓨터: 모니터(받침대 포함) + 키보드 + 마우스. 책상 위에 올려 쓴다
+  computer: (W, D, H) => {
+    const mh = H * 0.72 // 모니터 높이
+    const mz = -D / 2 + 60 // 모니터 위치 (뒤쪽)
+    return [
+      box('dark', 0, H - mh / 2, mz, W, mh, 30), // 모니터 테두리
+      box('screen', 0, H - mh / 2, mz + 16, W - 24, mh - 24, 2), // 화면
+      box('metal', 0, (H - mh) / 2 + 20, mz - 10, 50, H - mh + 40, 24), // 받침 기둥
+      box('metal', 0, 6, mz + 20, 240, 12, 170), // 받침
+      box('main', -W * 0.08, 12, D / 2 - 90, Math.min(440, W * 0.75), 24, 140), // 키보드
+      box('accent', -W * 0.08, 25, D / 2 - 90, Math.min(420, W * 0.72), 2, 120), // 자판
+      box('main', Math.min(W * 0.4, 280), 15, D / 2 - 90, 60, 30, 100), // 마우스
+    ]
+  },
+
+  // 컴퓨터 본체 (데스크톱 케이스): 상자 + 앞판 + 전원 단추 + 옆 유리
+  pcTower: (W, D, H) => [
+    box('main', 0, H / 2 + 10, 0, W, H - 20, D),
+    ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => box('dark', sx * (W / 2 - 25), 5, sz * (D / 2 - 40), 30, 10, 30))), // 발
+    box('accent', 0, H / 2 + 10, D / 2 + 1, W - 30, H - 50, 4), // 앞판
+    cyl('screen', 0, H - 50, D / 2 + 4, 24, 6, 'z'), // 전원 단추
+    box('glass', -W / 2 - 1, H / 2 + 10, 0, 4, H - 70, D - 70), // 옆 유리
+  ],
+
+  // 노트북: 본체 + 자판 + 세운 화면
+  laptop: (W, D, H) => [
+    box('main', 0, 9, 0, W, 18, D),
+    box('dark', 0, 19, D * 0.08, W - 40, 2, D * 0.5),
+    box('main', 0, 18 + (H - 18) / 2, -D / 2 + 6, W, H - 18, 8),
+    box('screen', 0, 18 + (H - 18) / 2, -D / 2 + 11, W - 24, H - 44, 2),
+  ],
+
+  // 인두기(납땜 스테이션): 온도 조절기 + 인두 거치대(코일) + 세운 인두 + 청소용 스펀지
+  solderStation: (W, D, H) => {
+    const cx = -W / 2 + Math.min(80, W * 0.27) // 조절기 위치
+    const hx = W / 2 - Math.min(60, W * 0.2) // 거치대 위치
+    const ch = Math.min(110, H * 0.5) // 조절기 높이
+    return [
+      box('main', cx, ch / 2, 0, Math.min(150, W * 0.5), ch, D - 20), // 조절기
+      box('screen', cx, ch * 0.62, D / 2 - 9, 80, 30, 2), // 온도 화면
+      cyl('accent', cx, ch * 0.28, D / 2 - 5, 30, 12, 'z'), // 다이얼
+      box('dark', hx, 10, 0, 110, 20, Math.min(110, D)), // 거치대 받침
+      box('book3', hx, 24, D / 2 - 30, 70, 8, 40), // 스펀지
+      cyl('metal', hx, 20 + (H * 0.55) / 2, -15, 40, H * 0.55), // 코일 거치대
+      cyl('accent', hx, 20 + H * 0.55 + (H * 0.42 - 20) / 2, -15, 22, H * 0.42 - 20), // 인두 손잡이
+    ]
+  },
+
+  // 벽걸이 거울: 얇은 틀 + 거울 (벽에 붙여 쓴다)
+  wallMirror: (W, D, H) => [box('main', 0, H / 2, 0, W, H, D), box('mirror', 0, H / 2, D / 2 + 1, W - 50, H - 50, 4)],
+
+  // 원형 벽걸이 거울
+  roundMirror: (W, D, H) => [
+    cyl('main', 0, H / 2, 0, Math.min(W, H), D, 'z'),
+    cyl('mirror', 0, H / 2, D / 2 + 1, Math.min(W, H) - 40, 4, 'z'),
+  ],
+
+  // 생수통 정수기: 본체 + 물 받는 곳 + 냉·온수 꼭지 + 위에 거꾸로 꽂은 생수통
+  waterCooler: (W, D, H) => {
+    const bh = Math.min(1000, H * 0.7) // 본체 높이
+    return [
+      box('main', 0, bh / 2, 0, W, bh, D),
+      box('dark', 0, bh * 0.72, D / 2 + 1, W - 90, bh * 0.2, 4), // 물 받는 곳
+      box('book1', -W * 0.15, bh * 0.78, D / 2 + 14, 30, 40, 26), // 온수 꼭지
+      box('book2', W * 0.15, bh * 0.78, D / 2 + 14, 30, 40, 26), // 냉수 꼭지
+      box('metal', 0, bh * 0.62, D / 2 + 20, W - 100, 12, 50), // 물받이
+      cyl('main', 0, bh + 10, 0, 120, 20), // 생수통 꽂는 목
+      cyl('glass', 0, bh + 20 + (H - bh - 20) / 2, 0, Math.min(W, D) * 0.85, H - bh - 20), // 생수통
+    ]
+  },
+
   // 판다리 유리 책상: 양옆이 통판 다리, 위는 색유리 상판, 다리 사이에 가림판
   panelDesk: (W, D, H) => {
     const g = 12 // 유리 두께

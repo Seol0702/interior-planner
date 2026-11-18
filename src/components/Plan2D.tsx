@@ -7,7 +7,7 @@ import type { Visible } from './Scene3D'
 import { WALL_THICKNESS, bounds, findPiece, footprint, wallItemSpan, type WallPiece } from '../plan'
 import { resolveItem } from '../library'
 import { fmtM, toPyeong } from '../units'
-import { isAddClick } from '../keys'
+import { ctrlHeld, isAddClick } from '../keys'
 import { alignAngle, distance, fmtLength, lengthParts, lockAxis, snapPlan, snapTargets, type MeasureState, type P3 } from '../measure'
 
 type DragType = 'room' | 'furniture' | 'wallItem' | 'note'
@@ -26,6 +26,7 @@ type Props = {
   onMeasure: (p: P3) => void // 줄자 도구로 점을 찍었을 때
   multi: string[] // Ctrl로 함께 고른 가구들
   onSelect: (selection: Selection, additive?: boolean) => void // additive: Ctrl+클릭 (더 고르기·빼기)
+  onBoxSelect: (ids: string[]) => void // Ctrl+드래그 범위로 고른 가구들
   onPlanClick: (x: number, y: number) => void // 도구(전선·메모)를 든 채로 평면을 눌렀을 때
   onFinishWire: () => void
   onMove: (type: DragType, id: string, x: number, y: number) => void
@@ -33,12 +34,12 @@ type Props = {
 }
 
 const MARGIN = 800 // 평면도 둘레 여백 (mm)
-const ROUND = ['roundTable', 'stool', 'lamp', 'plant', 'ceilingLight', 'pendant', 'beanbag', 'puck', 'fan', 'coatStand']
+const ROUND = ['roundMirror', 'roundTable', 'stool', 'lamp', 'plant', 'ceilingLight', 'pendant', 'beanbag', 'puck', 'fan', 'coatStand']
 
 /** 위에서 내려다본 2D 평면도. 방·가구·문·창문·메모를 끌어서 옮길 수 있다 */
 export default function Plan2D(props: Props) {
   const { project, pieces, selection, multi, guides, issues, patches, visible, tool, draft, measure } = props
-  const { onSelect, onPlanClick, onFinishWire, onMove, onDragEnd, onMeasure } = props
+  const { onSelect, onPlanClick, onFinishWire, onMove, onDragEnd, onMeasure, onBoxSelect } = props
   const { rooms, furniture, wallItems, wires, notes } = project
   const svgRef = useRef<SVGSVGElement>(null)
   const drag = useRef<{ type: DragType; id: string; dx: number; dy: number } | null>(null)
@@ -47,6 +48,10 @@ export default function Plan2D(props: Props) {
   const [cursor, setCursor] = useState<Point | null>(null) // 전선 미리보기용 마우스 위치
   const [aim, setAim] = useState<P3 | null>(null) // 줄자 끝이 지금 붙을 자리
   const [hoverIssue, setHoverIssue] = useState<string | null>(null) // 마우스를 올린 검사 표시
+  // Ctrl+드래그 범위 고르기: 시작점과 그때 이미 골라져 있던 가구들, 지금 그려진 사각형
+  const boxStart = useRef<{ x: number; y: number; before: string[] } | null>(null)
+  const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  const [hoverFurniture, setHoverFurniture] = useState<string | null>(null) // Ctrl을 누르고 올린 가구 (더해질 것 미리 보기)
   const targets = useMemo(() => (tool === 'measure' ? snapTargets(project, pieces) : null), [tool, project, pieces])
 
   const b = bounds(rooms)
@@ -62,13 +67,30 @@ export default function Plan2D(props: Props) {
     return { x: p.x, y: p.y }
   }
 
+  /** 지금 골라져 있는 가구들 */
+  const pickedNow = () => (multi.length ? multi : selection?.type === 'furniture' ? [selection.id] : [])
+
+  /** Ctrl+드래그 범위 고르기 시작 (손을 떼면 사각형에 걸친 가구들을 더한다) */
+  const beginBox = (e: React.PointerEvent) => {
+    const p = toPlan(e)
+    boxStart.current = { x: p.x, y: p.y, before: pickedNow() }
+    try {
+      svgRef.current!.setPointerCapture(e.pointerId) // 평면도 밖으로 끌어도 계속 따라오게
+    } catch {
+      // 붙잡기에 실패해도 범위 고르기는 된다
+    }
+    setFrozen(view)
+  }
+
   const start = (e: React.PointerEvent, type: DragType, id: string, originX: number, originY: number) => {
     // 전선·메모 도구를 들고 있을 때는 물건을 잡지 않고, 평면 클릭으로 넘긴다
     if (!picking) return
     // Ctrl(⌘)+왼쪽 클릭: 가구를 여러 개 고르기에 더하거나 뺀다 (맥은 오른쪽 버튼으로 바뀌어 올 때도 있다)
-    if (type === 'furniture' && isAddClick(e)) {
+    // 누른 채 끌면 범위 고르기가 된다. 방·메모 위에서 시작해도 범위 고르기
+    if (isAddClick(e)) {
       e.stopPropagation()
-      onSelect({ type, id }, true) // Ctrl+클릭: 끌지 않고 고르기만
+      beginBox(e)
+      if (type === 'furniture') onSelect({ type, id }, true) // 누르는 순간 바로 더하거나 뺀다
       return
     }
     if (e.button !== 0) return
@@ -95,9 +117,33 @@ export default function Plan2D(props: Props) {
     if (tool === 'measure') setAim(measurePoint(e))
     const d = drag.current
     if (d) onMove(d.type, d.id, p.x + d.dx, p.y + d.dy)
+    const b = boxStart.current
+    if (b && (box || Math.hypot(p.x - b.x, p.y - b.y) > fs * 0.4)) setBox({ x0: b.x, y0: b.y, x1: p.x, y1: p.y })
   }
 
   const end = (e: React.PointerEvent) => {
+    const b = boxStart.current
+    if (b) {
+      boxStart.current = null
+      if (svgRef.current!.hasPointerCapture(e.pointerId)) svgRef.current!.releasePointerCapture(e.pointerId)
+      setFrozen(null)
+      if (box) {
+        // 사각형에 조금이라도 걸친 (보이는) 가구를 모두 더한다
+        const lo = { x: Math.min(box.x0, box.x1), y: Math.min(box.y0, box.y1) }
+        const hi = { x: Math.max(box.x0, box.x1), y: Math.max(box.y0, box.y1) }
+        const hit = furniture
+          .filter((f) => {
+            const item = resolveItem(f)
+            if (!item || !(item.layer === 'electric' ? visible.electric : visible.furniture)) return false
+            const fp = footprint(item, f.rotation)
+            return f.x + fp.w / 2 > lo.x && f.x - fp.w / 2 < hi.x && f.y + fp.d / 2 > lo.y && f.y - fp.d / 2 < hi.y
+          })
+          .map((f) => f.id)
+        onBoxSelect([...new Set([...b.before, ...hit])])
+        setBox(null)
+      }
+      return
+    }
     if (!drag.current) return
     drag.current = null
     svgRef.current!.releasePointerCapture(e.pointerId)
@@ -106,6 +152,7 @@ export default function Plan2D(props: Props) {
   }
 
   const background = (e: React.PointerEvent) => {
+    if (picking && isAddClick(e)) return beginBox(e) // 빈 곳에서 Ctrl+드래그: 범위 고르기
     if (e.button !== 0) return
     if (picking) onSelect(null)
     else if (tool === 'measure') onMeasure(measurePoint(e))
@@ -188,7 +235,14 @@ export default function Plan2D(props: Props) {
         const labelSize = Math.min(fs * 0.8, (fp.w / item.name.length) * 0.95, fp.d * 0.5)
         const mark = item.depth / 2 - Math.min(60, item.depth * 0.15)
         return (
-          <g key={f.id} className="grab" transform={`translate(${f.x} ${f.y}) rotate(${f.rotation})`} onPointerDown={(e) => start(e, 'furniture', f.id, f.x, f.y)}>
+          <g
+            key={f.id}
+            className="grab"
+            transform={`translate(${f.x} ${f.y}) rotate(${f.rotation})`}
+            onPointerDown={(e) => start(e, 'furniture', f.id, f.x, f.y)}
+            onPointerMove={(e) => setHoverFurniture(ctrlHeld(e) ? f.id : null)}
+            onPointerLeave={() => setHoverFurniture((h) => (h === f.id ? null : h))}
+          >
             <rect
               x={-item.width / 2}
               y={-item.depth / 2}
@@ -198,8 +252,9 @@ export default function Plan2D(props: Props) {
               // 유리 상판 책상은 위에서 보면 유리(포인트 색)가 보인다
               fill={item.shape === 'panelDesk' ? (f.accent ?? item.accent) : (f.color ?? item.color)}
               fillOpacity={item.mount === 'ceiling' ? 0.45 : item.shape === 'panelDesk' ? 0.6 : 1}
-              stroke={selected ? '#2563eb' : '#52525b'}
-              strokeWidth={selected ? fs * 0.2 : fs * 0.08}
+              // 고른 것은 파란 테두리 (여러 개 골랐을 때는 더 두껍게), Ctrl을 누르고 올리면 연한 파랑으로 미리 보기
+              stroke={selected ? '#2563eb' : hoverFurniture === f.id ? '#60a5fa' : '#52525b'}
+              strokeWidth={selected ? fs * (multi.includes(f.id) ? 0.4 : 0.2) : hoverFurniture === f.id ? fs * 0.25 : fs * 0.08}
               strokeDasharray={item.mount === 'ceiling' ? `${fs * 0.3} ${fs * 0.2}` : undefined}
             />
             {/* 앞쪽 표시 */}
@@ -288,11 +343,11 @@ export default function Plan2D(props: Props) {
       {issues.map((issue) => (
         <g
           key={issue.id}
-          className="issue"
+          className="issue overlay-mark"
           onPointerDown={(e) => {
             e.stopPropagation()
-            if (e.button !== 0 && !isAddClick(e)) return
-            onSelect(issue.target, isAddClick(e)) // Ctrl을 누르고 있으면 여러 개 고르기에 더한다
+            if (e.button !== 0) return
+            onSelect(issue.target)
           }}
           onPointerEnter={() => setHoverIssue(issue.id)}
           onPointerLeave={() => setHoverIssue((h) => (h === issue.id ? null : h))}
@@ -310,7 +365,7 @@ export default function Plan2D(props: Props) {
       {measure.list.map((m) => (
         <g
           key={m.id}
-          className={picking ? 'pick' : undefined}
+          className={picking ? 'pick overlay-mark' : undefined}
           pointerEvents={picking ? 'auto' : 'none'}
           onPointerDown={(e) => {
             if (e.button !== 0 || !picking) return
@@ -339,7 +394,7 @@ export default function Plan2D(props: Props) {
           const lh = fs * 1.05
           const width = Math.max(...lines.map((l) => l.length)) * fs * 0.82 + fs
           return (
-            <g key={note.id} className="grab" onPointerDown={(e) => start(e, 'note', note.id, note.x, note.y)}>
+            <g key={note.id} className="grab overlay-mark" onPointerDown={(e) => start(e, 'note', note.id, note.x, note.y)}>
               <circle cx={note.x} cy={note.y} r={fs * 0.38} fill="#7c3aed" stroke={selected ? '#2563eb' : '#fff'} strokeWidth={fs * (selected ? 0.16 : 0.08)} />
               {(selected || visible.expandNotes) && (
                 <g pointerEvents="none">
@@ -354,6 +409,21 @@ export default function Plan2D(props: Props) {
             </g>
           )
         })}
+      {/* Ctrl+드래그 범위 고르기 사각형 */}
+      {box && (
+        <rect
+          x={Math.min(box.x0, box.x1)}
+          y={Math.min(box.y0, box.y1)}
+          width={Math.abs(box.x1 - box.x0)}
+          height={Math.abs(box.y1 - box.y0)}
+          fill="#2563eb"
+          fillOpacity={0.08}
+          stroke="#2563eb"
+          strokeWidth={fs * 0.08}
+          strokeDasharray={`${fs * 0.3} ${fs * 0.2}`}
+          pointerEvents="none"
+        />
+      )}
       {/* 검사 표시 설명 (맨 위에 그린다) */}
       {(() => {
         const issue = issues.find((i) => i.id === hoverIssue)

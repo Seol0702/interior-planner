@@ -134,6 +134,8 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('wardrobe-2', '2문 옷장', '침실', 'wardrobe', 800, 580, 1900, '#e2d6c6', '#efe6d8'),
   item('wardrobe-sliding', '슬라이딩 옷장', '침실', 'wardrobe', 1800, 620, 2100, '#8a7b6c', '#a39586'),
   item('mirror-wide', '와이드 거울', '침실', 'mirror', 1000, 300, 1500, '#2f2f33', '#2f2f33'),
+  item('wall-mirror', '벽걸이 거울', '침실', 'wallMirror', 600, 30, 900, '#c8b49a', '#c8b49a', { base: 900 }),
+  item('wall-mirror-round', '원형 벽걸이 거울', '침실', 'roundMirror', 600, 30, 600, '#2f2f33', '#2f2f33', { base: 1100 }),
   item('vanity-compact', '미니 화장대', '침실', 'vanity', 800, 400, 1350, '#e8dfd2', '#f1ede6'),
   item('hanger-mini', '미니 행거', '침실', 'hanger', 800, 400, 1500, '#e4e4e7', '#d9cbb6'),
 
@@ -144,6 +146,11 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('desk-study', '학생 책상', '서재', 'desk', 1200, 600, 740, '#e9e4dc', '#9fb3c8'),
   item('desk-glass-panel', '판다리 유리 책상', '서재', 'panelDesk', 1400, 700, 740, '#e4e1da', '#3f9f6c'),
   item('table-glass-panel', '판다리 유리 회의 테이블', '서재', 'panelDesk', 2400, 1200, 750, '#e4e1da', '#3f9f6c'),
+  // 책상 위에 올려 쓰는 것 (base: 책상 높이만큼 띄움, 선택 카드에서 바꿀 수 있다)
+  item('computer-desktop', '컴퓨터 (모니터·키보드)', '서재', 'computer', 600, 450, 470, '#2f2f33', '#4b4f57', { base: 740 }),
+  item('pc-tower', '컴퓨터 본체', '서재', 'pcTower', 210, 450, 460, '#26272b', '#3a3d44'),
+  item('laptop', '노트북', '서재', 'laptop', 340, 240, 230, '#b9bcc2', '#2f2f33', { base: 740 }),
+  item('soldering-station', '인두기 (납땜 스테이션)', '서재', 'solderStation', 300, 180, 220, '#3a3d44', '#d14b3d', { base: 740 }),
   item('chair-mesh', '메쉬 의자', '서재', 'officeChair', 620, 620, 1050, '#52525b', '#71717a'),
   item('chair-study', '원목 공부 의자', '서재', 'chair', 450, 500, 820, '#b08e68', '#b08e68'),
   item('bookshelf-wide', '와이드 책장', '서재', 'bookshelf', 1200, 300, 1800, '#f1efe9', '#f1efe9'),
@@ -185,9 +192,13 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('vacuum-station', '무선청소기 거치대', '가전', 'tower', 300, 300, 1200, '#e4e4e7', '#71717a'),
   item('speaker', '스탠드 스피커', '가전', 'tower', 250, 300, 1000, '#27272a', '#3f3f46'),
   item('water-purifier', '스탠드 정수기', '가전', 'tower', 300, 400, 1300, '#f4f4f2', '#a9d3ee'),
+  item('water-cooler', '생수통 정수기', '가전', 'waterCooler', 320, 340, 1400, '#f1f1ef', '#8cc4ea'),
 
   // ── 수납 ──
   item('storage-cabinet', '수납장', '수납', 'wardrobe', 800, 400, 1100, '#e8dfd2', '#f1ede6'),
+  item('steel-cabinet', '철제 캐비닛 (양문형)', '수납', 'wardrobe', 900, 450, 1800, '#c9ccd0', '#d6d9dd'),
+  item('file-cabinet-tall', '서랍형 서류 캐비닛', '수납', 'drawers', 470, 620, 1330, '#c9ccd0', '#d6d9dd'),
+  item('wood-cabinet', '원목 캐비닛', '수납', 'wardrobe', 1000, 420, 1200, '#9b7653', '#b48d68'),
   item('open-shelf', '오픈 선반', '수납', 'bookshelf', 900, 350, 1200, '#3f3f46', '#3f3f46'),
   item('shoe-cabinet-tall', '키큰 신발장', '수납', 'wardrobe', 900, 380, 2000, '#efe9df', '#f7f3ec'),
   item('shoe-rack', '신발 선반', '수납', 'cubeShelf', 800, 300, 800, '#c9a67a', '#a58a6d'),
@@ -229,6 +240,9 @@ export const LIBRARY: FurnitureLibraryItem[] = [
 export const isPassable = (i: FurnitureLibraryItem) =>
   i.shape === 'rug' || i.mount === 'ceiling' || i.shape === 'powerStrip' || i.shape === 'puck'
 
+/** 가구 바닥이 놓이는 높이 (mm): 천장 물건은 천장에서 매달고, 책상 위 물건은 띄운다 */
+export const bottomOf = (i: FurnitureLibraryItem, wallHeight: number) => (i.mount === 'ceiling' ? wallHeight - i.height : (i.base ?? 0))
+
 /** 가구 분류 목록 (라이브러리에 나온 순서대로) */
 export const FURNITURE_CATEGORIES = [...new Set(LIBRARY.map((i) => i.category))]
 
@@ -238,8 +252,8 @@ export const FURNITURE_CATEGORIES = [...new Set(LIBRARY.map((i) => i.category))]
  */
 export function resolveItem(f: FurnitureInstance): FurnitureLibraryItem | undefined {
   const base = findLibraryItem(f.libraryId)
-  if (!base || (f.width === undefined && f.depth === undefined && f.height === undefined)) return base
-  return { ...base, width: f.width ?? base.width, depth: f.depth ?? base.depth, height: f.height ?? base.height }
+  if (!base || (f.width === undefined && f.depth === undefined && f.height === undefined && f.base === undefined)) return base
+  return { ...base, width: f.width ?? base.width, depth: f.depth ?? base.depth, height: f.height ?? base.height, base: f.base ?? base.base }
 }
 
 /** id로 라이브러리 가구 찾기 */

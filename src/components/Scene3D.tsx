@@ -7,7 +7,7 @@ import type { Guide } from '../guides'
 import type { Issue } from '../drc'
 import type { Sun, SunPatch } from '../sun'
 import { bounds, type WallPiece } from '../plan'
-import { resolveItem } from '../library'
+import { bottomOf, resolveItem } from '../library'
 import { posePosition, viewPose } from '../camera'
 import { mm } from '../units'
 import Plan3D from './Plan3D'
@@ -18,9 +18,10 @@ import Compass from './Compass'
 import WalkControls, { type WalkAction, type WalkView } from './WalkControls'
 import Surroundings, { type Ground } from './Surroundings'
 import Measure3D from './Measure3D'
+import BoxSelect3D, { type BoxCandidate } from './BoxSelect3D'
 import type { MeasureState, P3 } from '../measure'
 import { buildObstacles } from '../walk'
-import { ctrlHeld, isAddClick } from '../keys'
+import { ctrlHeld } from '../keys'
 import { STOREY, type Building } from '../site'
 
 const LEVEL_NAME = { error: '오류', warn: '주의', info: '참고' }
@@ -55,6 +56,7 @@ type Props = {
   outside: Outside | null
   onWalkFail: () => void
   onSelect: (selection: Selection, additive?: boolean) => void
+  onBoxSelect: (ids: string[]) => void // Ctrl+드래그 범위로 고른 가구들
   onFloorClick: (roomId: string, x: number, y: number) => void
   onMoveFurniture: (id: string, x: number, y: number) => void
   onMoveWallItem: (id: string, along: number, height: number) => void
@@ -71,6 +73,14 @@ export default function Scene3D(props: Props) {
   const b = useMemo(() => bounds(project.rooms), [project.rooms])
   const compass = useRef<HTMLDivElement>(null)
   const measureLayer = useRef<HTMLDivElement>(null) // 줄자 길이 글자를 붙이는 층
+  const boxRect = useRef<HTMLDivElement>(null) // Ctrl+드래그 범위 고르기 사각형
+  // 범위 고르기 후보: 보이는 가구의 가운데
+  const candidates: BoxCandidate[] = project.furniture.flatMap((f) => {
+    const item = resolveItem(f)
+    if (!item || !(item.layer === 'electric' ? visible.electric : visible.furniture)) return []
+    return [{ id: f.id, center: [mm(f.x), mm(bottomOf(item, project.wallHeight) + item.height / 2), mm(f.y)] as [number, number, number] }]
+  })
+  const pickedIds = props.multi.length ? props.multi : selection?.type === 'furniture' ? [selection.id] : []
   const { onSelect, onFloorClick, onMoveFurniture, onMoveWallItem, onDragEnd } = props
   // 처음 켰을 때의 카메라 자세 (한 번만 계산)
   const [pose] = useState(() => viewPose('iso', project.rooms))
@@ -103,12 +113,7 @@ export default function Scene3D(props: Props) {
           <button
             className={`issue-dot ${issue.level}`}
             aria-label={issue.message}
-            // Ctrl(⌘)+왼쪽 클릭: 누르는 순간 여러 개 고르기에 더한다 (가구 한가운데의 ! 를 눌러도)
-            onPointerDown={(e) => {
-              if (!isAddClick(e)) return
-              e.preventDefault()
-              onSelect(issue.target, true)
-            }}
+            // Ctrl을 누르고 있을 때는 이 표시가 클릭을 통과시켜서 밑의 가구가 골라진다 (index.css의 mod-held)
             onClick={(e) => !ctrlHeld(e) && onSelect(issue.target)}
             onContextMenu={(e) => e.preventDefault()}
           >
@@ -125,7 +130,7 @@ export default function Scene3D(props: Props) {
   const picked = selection?.type === 'furniture' ? project.furniture.find((f) => f.id === selection.id) : undefined
   const pickedItem = picked && resolveItem(picked)
   if (picked && pickedItem && !walking) {
-    const top = pickedItem.mount === 'ceiling' ? project.wallHeight : pickedItem.height
+    const top = bottomOf(pickedItem, project.wallHeight) + pickedItem.height
     anchors.push({ id: 'tag', pos: [mm(picked.x), mm(top) + 0.25, mm(picked.y)], node: <div className="tag">{pickedItem.name}</div> })
   }
 
@@ -180,6 +185,7 @@ export default function Scene3D(props: Props) {
             instance={f}
             item={item}
             selected={(selection?.type === 'furniture' && selection.id === f.id) || props.multi.includes(f.id)}
+            multi={props.multi.includes(f.id)}
             wallHeight={project.wallHeight}
             lit={lampsOn}
             interactive={interactive}
@@ -250,6 +256,7 @@ export default function Scene3D(props: Props) {
           onMeasure={props.onMeasure}
         />
       )}
+      {interactive && <BoxSelect3D candidates={candidates} picked={pickedIds} rectRef={boxRect} onBoxSelect={props.onBoxSelect} />}
       <CameraRig request={viewRequest} rooms={project.rooms} />
     </Canvas>
 
@@ -257,6 +264,7 @@ export default function Scene3D(props: Props) {
     <div className="overlay">
       <Compass innerRef={compass} />
       <div className="measure-layer" ref={measureLayer} />
+      <div className="box-select" ref={boxRect} />
       {anchors.map((a) => (
         <div
           key={a.id}

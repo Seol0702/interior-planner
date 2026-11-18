@@ -564,7 +564,7 @@ export default function App() {
   }
 
   /** 크기 바꾸기. 원래 크기와 같아지면 저장하지 않는다 (null이면 원래 크기로) */
-  const resizeSelected = (size: { width?: number; depth?: number; height?: number } | null) => {
+  const resizeSelected = (size: { width?: number; depth?: number; height?: number; base?: number } | null) => {
     if (!selectedFurniture) return
     const base = findLibraryItem(selectedFurniture.libraryId)
     if (!base) return
@@ -573,6 +573,7 @@ export default function App() {
       for (const key of ['width', 'depth', 'height'] as const) {
         if (size === null || next[key] === base[key]) delete next[key]
       }
+      if (size === null || next.base === (base.base ?? 0)) delete next.base // 띄운 높이도 원래대로면 저장하지 않는다
       return next
     })
   }
@@ -980,6 +981,7 @@ export default function App() {
                   measure={measure}
                   onMeasure={addMeasurePoint}
                   onSelect={pick}
+                  onBoxSelect={selectMany}
                   onPlanClick={planClick}
                   onFinishWire={finishWire}
                   onMove={moveOnPlan}
@@ -1016,6 +1018,7 @@ export default function App() {
                     showToast('설 자리가 없어요. 가구 사이에 몸 폭만큼 빈 바닥이 필요해요', true)
                   }}
                   onSelect={pick}
+                  onBoxSelect={selectMany}
                   onFloorClick={(roomId, x, y) => (tool === 'select' ? setSelection({ type: 'room', id: roomId }) : planClick(x, y))}
                   onMoveFurniture={moveFurniture}
                   onMoveWallItem={moveWallItemOnWall}

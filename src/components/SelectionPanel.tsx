@@ -15,13 +15,13 @@ type Props = {
   onDelete: () => void
   onClose: () => void
   onRecolor: (colors: { color?: string; accent?: string }) => void
-  onResize: (size: { width?: number; depth?: number; height?: number } | null) => void // null = 원래 크기
+  onResize: (size: { width?: number; depth?: number; height?: number; base?: number } | null) => void // null = 원래 크기
   onToast: (text: string, error?: boolean) => void
 }
 
 /** 선택한 가구의 속성 카드 */
 export default function SelectionPanel({ instance, item, thumb, onRotate, onDuplicate, onDelete, onClose, onRecolor, onResize, onToast }: Props) {
-  const resized = instance.width !== undefined || instance.depth !== undefined || instance.height !== undefined
+  const resized = instance.width !== undefined || instance.depth !== undefined || instance.height !== undefined || instance.base !== undefined
   const base = findLibraryItem(instance.libraryId)
   const fileInput = useRef<HTMLInputElement>(null)
   const changed = instance.color !== undefined || instance.accent !== undefined
@@ -77,6 +77,12 @@ export default function SelectionPanel({ instance, item, thumb, onRotate, onDupl
         <NumberField label="깊이" unit="cm" value={item.depth} min={30} max={10000} onCommit={(depth) => onResize({ depth })} />
         <NumberField label="높이" unit="cm" value={item.height} min={10} max={4000} onCommit={(height) => onResize({ height })} />
       </div>
+      {item.mount !== 'ceiling' && (
+        <div className="fields three">
+          {/* 책상 위에 올리거나 벽에 걸 때: 바닥에서 얼마나 띄울지 */}
+          <NumberField label="바닥에서 띄우기" unit="cm" value={item.base ?? 0} min={0} max={3000} onCommit={(b) => onResize({ base: b })} />
+        </div>
+      )}
 
       <div className="fields two">
         <label className="field">

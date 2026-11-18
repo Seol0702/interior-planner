@@ -1819,3 +1819,20 @@ kbd {
   pointer-events: none;
   transition: opacity 0.12s;
 }
+
+/* Ctrl+드래그 범위 고르기 사각형 (3D) */
+.box-select {
+  display: none;
+  position: absolute;
+  border: 1.5px dashed var(--accent);
+  border-radius: 2px;
+  background: rgb(37 99 235 / 0.08);
+  pointer-events: none;
+}
+
+/* Ctrl(⌘)을 누르고 있는 동안: 검사 표시·줄자·메모 점이 클릭을 막지 않게 (밑에 있는 가구가 골라지게) */
+.stage.mod-held .plan2d .overlay-mark,
+.stage.mod-held .anchor > *,
+.stage.mod-held .measure-label.pickable {
+  pointer-events: none;
+}

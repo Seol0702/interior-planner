@@ -1,7 +1,9 @@
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useThree, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
+import { Line } from '@react-three/drei'
 import type { FurnitureInstance, FurnitureLibraryItem } from '../types'
+import { bottomOf } from '../library'
 import { buildParts, toneColor } from '../models'
 import { mm, toMm } from '../units'
 import { ctrlHeld, isAddClick } from '../keys'
@@ -10,6 +12,7 @@ type Props = {
   instance: FurnitureInstance
   item: FurnitureLibraryItem
   selected: boolean
+  multi?: boolean // 여러 개 고른 것 중 하나 (테두리를 더 두껍게)
   wallHeight: number
   lit: boolean // 조명이 켜져 있는가
   interactive: boolean // 선택 도구일 때만 잡아서 옮길 수 있다
@@ -18,11 +21,10 @@ type Props = {
   onDragEnd: () => void
 }
 
-// 바닥 평면 (y = 0). 마우스 광선이 바닥의 어디에 닿는지 계산할 때 사용
-const FLOOR = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
 
 /** 배치된 가구 하나. 부품 여러 개로 조립해서 그리고, 드래그로 이동할 수 있다 */
-export default function FurnitureMesh({ instance, item, selected, wallHeight, lit, interactive, onSelect, onMove, onDragEnd }: Props) {
+export default function FurnitureMesh({ instance, item, selected, multi = false, wallHeight, lit, interactive, onSelect, onMove, onDragEnd }: Props) {
+  const [hover, setHover] = useState(false) // Ctrl을 누르고 마우스를 올렸나 (더해질 것 미리 보기)
   // 카메라 조작기. 가구를 끄는 동안에는 꺼서 화면이 같이 움직이지 않게 한다
   const controls = useThree((state) => state.controls) as { enabled: boolean } | null
   // useRef: 화면을 다시 그리지 않아도 되는 값 보관 (드래그 상태)
@@ -32,16 +34,26 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
     () => buildParts(item.shape, item.width, item.depth, item.height),
     [item.shape, item.width, item.depth, item.height],
   )
-  const outline = useMemo(
-    () => new THREE.EdgesGeometry(new THREE.BoxGeometry(mm(item.width), mm(item.height), mm(item.depth))),
-    [item.width, item.height, item.depth],
-  )
+  // 테두리: 상자의 모서리 12개 (굵기를 정할 수 있는 선으로 그린다)
+  const outline = useMemo(() => {
+    const [w, h, d] = [mm(item.width) / 2, mm(item.height), mm(item.depth) / 2]
+    const c = [
+      [-w, 0, -d], [w, 0, -d], [w, 0, d], [-w, 0, d],
+      [-w, h, -d], [w, h, -d], [w, h, d], [-w, h, d],
+    ] as [number, number, number][]
+    const edges = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]
+    return edges.flatMap(([a, b]) => [c[a], c[b]])
+  }, [item.width, item.height, item.depth])
   const main = instance.color ?? item.color
   const accent = instance.accent ?? item.accent
 
-  /** 마우스 위치 → 바닥 위 좌표(mm) */
+  // 천장등은 천장에 붙이고, 책상 위 물건은 띄운다
+  const baseY = mm(bottomOf(item, wallHeight))
+
+  /** 마우스 위치 → 가구 바닥 높이의 평면 위 좌표(mm). 띄운 물건도 잡은 자리 그대로 따라오게 */
   const floorPoint = (e: ThreeEvent<PointerEvent>) => {
-    const hit = e.ray.intersectPlane(FLOOR, new THREE.Vector3())
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), item.mount === 'ceiling' ? 0 : -baseY)
+    const hit = e.ray.intersectPlane(plane, new THREE.Vector3())
     return hit ? { x: toMm(hit.x), y: toMm(hit.z) } : null
   }
 
@@ -78,8 +90,6 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
     onDragEnd()
   }
 
-  // 천장등은 천장에 붙여서 그린다
-  const baseY = item.mount === 'ceiling' ? mm(wallHeight - item.height) : 0
   const glowing = lit && item.light === true
 
   return (
@@ -87,7 +97,6 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
       position={[mm(instance.x), baseY, mm(instance.y)]}
       rotation={[0, THREE.MathUtils.degToRad(-instance.rotation), 0]}
       onPointerDown={handleDown}
-      onPointerMove={handleMove}
       onPointerUp={handleUp}
       // 손을 뗄 때 생기는 클릭이 뒤에 있는 바닥까지 전달돼 방이 선택되지 않게 막는다
       onClick={(e) => interactive && e.stopPropagation()}
@@ -99,7 +108,15 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
         onSelect()
       }}
       onPointerOver={() => (document.body.style.cursor = 'grab')}
-      onPointerOut={() => (document.body.style.cursor = '')}
+      onPointerMove={(e) => {
+        handleMove(e)
+        const want = interactive && ctrlHeld(e)
+        if (want !== hover) setHover(want)
+      }}
+      onPointerOut={() => {
+        document.body.style.cursor = ''
+        setHover(false)
+      }}
     >
       {parts.map((p, i) => (
         <mesh
@@ -142,10 +159,14 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
-      {selected && (
-        <lineSegments geometry={outline} position={[0, mm(item.height) / 2, 0]}>
-          <lineBasicMaterial color="#2563eb" />
-        </lineSegments>
+      {(selected || hover) && (
+        <Line
+          points={outline}
+          segments
+          color={selected ? '#2563eb' : '#60a5fa'}
+          lineWidth={selected ? (multi ? 4.5 : 2.5) : 2}
+          raycast={() => null} // 테두리는 클릭을 받지 않는다
+        />
       )}
     </group>
   )

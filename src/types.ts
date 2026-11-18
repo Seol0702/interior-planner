@@ -4,7 +4,7 @@ import type { Site } from './site'
 import type { Measurement } from './measure'
 
 /** 무늬 종류 */
-export type PatternId = 'solid' | 'stripe' | 'check' | 'dot' | 'brick' | 'tile' | 'plank'
+export type PatternId = 'solid' | 'stripe' | 'check' | 'dot' | 'brick' | 'tile' | 'plank' | 'terrazzo'
 
 /** 마감재(벽지·장판) 한 가지: 무늬 + 색 2개 + 무늬 크기 */
 export type Finish = {
@@ -103,6 +103,13 @@ export type ShapeId =
   | 'washbasin'
   | 'crib'
   | 'treadmill'
+  | 'computer'
+  | 'pcTower'
+  | 'laptop'
+  | 'solderStation'
+  | 'wallMirror'
+  | 'roundMirror'
+  | 'waterCooler'
 
 /** 가구 라이브러리에 들어있는 "부품" (KiCad의 심볼+풋프린트 같은 것) */
 export type FurnitureLibraryItem = {
@@ -117,6 +124,7 @@ export type FurnitureLibraryItem = {
   accent: string // 포인트 색 (쿠션, 문짝 등)
   layer: 'furniture' | 'electric' // 어느 보기(레이어)에 속하는지
   mount?: 'ceiling' // 천장에 다는 물건
+  base?: number // 바닥에서 띄운 높이 (mm). 책상 위 물건·벽걸이 거울 등
   light?: boolean // 빛을 내는 조명인지
 }
 
@@ -132,6 +140,7 @@ export type FurnitureInstance = {
   width?: number // 크기를 바꿨을 때만 저장 (mm)
   depth?: number
   height?: number
+  base?: number // 바닥에서 띄운 높이를 바꿨을 때만 저장 (mm)
 }
 
 /** 저장 파일(JSON) 한 개에 들어가는 전체 내용 */

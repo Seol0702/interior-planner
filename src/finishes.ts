@@ -19,9 +19,10 @@ export const FLOOR_PATTERNS: { id: PatternId; name: string }[] = [
   { id: 'plank', name: '마루' },
   { id: 'tile', name: '타일' },
   { id: 'check', name: '체스 타일' },
+  { id: 'terrazzo', name: '테라조' },
 ]
 
-export const ALL_PATTERNS: PatternId[] = ['solid', 'stripe', 'check', 'dot', 'brick', 'tile', 'plank']
+export const ALL_PATTERNS: PatternId[] = ['solid', 'stripe', 'check', 'dot', 'brick', 'tile', 'plank', 'terrazzo']
 
 const f = (pattern: PatternId, color: string, accent: string, size: number): Finish => ({ pattern, color, accent, size })
 
@@ -52,6 +53,8 @@ export const FLOORS: FinishPreset[] = [
   { id: 'f-tile-dark', name: '다크 타일', finish: f('tile', '#5b5f66', '#3e4147', 600) },
   { id: 'f-terracotta', name: '테라코타', finish: f('tile', '#c4734f', '#e6d8c8', 300) },
   { id: 'f-chess', name: '체스 타일', finish: f('check', '#f1efe9', '#3a3a3a', 800) },
+  { id: 'f-terrazzo', name: '테라조 타일', finish: f('terrazzo', '#cdc3b1', '#6f5c4a', 400) },
+  { id: 'f-terrazzo-white', name: '화이트 테라조', finish: f('terrazzo', '#ebe7df', '#8a8580', 400) },
 ]
 
 export const DEFAULT_WALL = WALLPAPERS[0].finish
@@ -113,6 +116,59 @@ function drawPattern(ctx: CanvasRenderingContext2D, S: number, finish: Finish) {
       ctx.fillRect(0, 0, lw / 2, S / 2)
       ctx.fillRect(S - lw / 2, 0, lw / 2, S / 2)
       ctx.fillRect(S / 2 - lw / 2, S / 2, lw, S / 2)
+      break
+    }
+    case 'terrazzo': {
+      // 테라조(인조석): 바탕에 크고 작은 돌 알갱이가 촘촘히 박히고, 가는 줄눈으로 타일이 나뉜다
+      const rand = seededRandom(11)
+      // 바탕의 은은한 얼룩
+      for (let i = 0; i < 40; i++) {
+        ctx.fillStyle = shade(finish.color, (rand() - 0.5) * 0.08)
+        ctx.globalAlpha = 0.5
+        const r = S * (0.04 + rand() * 0.08)
+        const x = rand() * S
+        const y = rand() * S
+        for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) {
+          ctx.beginPath()
+          ctx.arc(x + dx, y + dy, r, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+      ctx.globalAlpha = 1
+      // 돌 알갱이 색: 포인트 색(갈색) + 진한 회색 + 옅은 돌 + 어두운 돌
+      const chips = [finish.accent, finish.accent, shade(finish.accent, -0.3), shade(finish.accent, 0.25), shade(finish.accent, 0.45), '#7d7b78', '#5a5856', shade(finish.color, 0.12), shade(finish.color, -0.22)]
+      const n = 2300
+      for (let i = 0; i < n; i++) {
+        ctx.fillStyle = chips[Math.floor(rand() * chips.length)]
+        const r = S * (0.003 + rand() * rand() * 0.014) // 작은 알갱이가 훨씬 많게
+        const x = rand() * S
+        const y = rand() * S
+        const k = 5 + Math.floor(rand() * 3) // 모난 돌 모양 (5~7각형)
+        const turn = rand() * Math.PI
+        const pts = Array.from({ length: k }, (_, j) => {
+          const a = turn + (j / k) * Math.PI * 2
+          const rr = r * (0.6 + rand() * 0.5)
+          return [Math.cos(a) * rr, Math.sin(a) * rr * (0.6 + rand() * 0.4)]
+        })
+        // 가장자리에 걸친 알갱이는 반대편에도 그려서 이음매 없이 이어지게
+        for (const dx of x < r * 2 ? [0, S] : x > S - r * 2 ? [0, -S] : [0]) {
+          for (const dy of y < r * 2 ? [0, S] : y > S - r * 2 ? [0, -S] : [0]) {
+            ctx.beginPath()
+            pts.forEach(([px, py], j) => (j === 0 ? ctx.moveTo(x + dx + px, y + dy + py) : ctx.lineTo(x + dx + px, y + dy + py)))
+            ctx.closePath()
+            ctx.fill()
+          }
+        }
+      }
+      // 줄눈: 가늘고 약간 어둡게
+      ctx.fillStyle = shade(finish.color, -0.35)
+      ctx.globalAlpha = 0.8
+      const lw = Math.max(1.5, S * 0.006)
+      ctx.fillRect(0, 0, S, lw / 2)
+      ctx.fillRect(0, S - lw / 2, S, lw / 2)
+      ctx.fillRect(0, 0, lw / 2, S)
+      ctx.fillRect(S - lw / 2, 0, lw / 2, S)
+      ctx.globalAlpha = 1
       break
     }
     case 'plank': {
