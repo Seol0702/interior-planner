@@ -467,7 +467,7 @@ export default function App() {
     if (!item.onTop) {
       // 다른 가구를 통과하지 못하게: 막히면 딱 닿는 자리에서 멈춘다
       const lo = bottomOf(item, p.wallHeight)
-      const lm = limitMove(rectOf(f, item), lo, lo + item.height, placed.x - f.x, placed.y - f.y, solidsOf(p, [id]))
+      const lm = limitMove(item, rectOf(f, item), lo, lo + item.height, placed.x - f.x, placed.y - f.y, solidsOf(p, [id]))
       placed = placeInPlan({ ...f, x: f.x + lm.dx, y: f.y + lm.dy }, item, p.rooms)
     }
     placed = seat(placed, p) // 책상 위 물건은 밑에 있는 가구 윗면으로
@@ -501,7 +501,7 @@ export default function App() {
       ey = limit(ey, placed.y - f.y)
       if (item.onTop) continue // 책상 위 물건은 가구 위로 올라앉으므로 막지 않는다
       const lo = bottomOf(item, p.wallHeight)
-      const lm = limitMove(rectOf(f, item), lo, lo + item.height, ex, ey, solids) // 다른 가구를 통과하지 못하게
+      const lm = limitMove(item, rectOf(f, item), lo, lo + item.height, ex, ey, solids) // 다른 가구를 통과하지 못하게 (의자는 책상 밑으로 들어간다)
       ex = limit(ex, lm.dx)
       ey = limit(ey, lm.dy)
     }

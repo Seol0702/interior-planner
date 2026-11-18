@@ -8,7 +8,23 @@ import { footprint, type Rect } from './plan'
 export const TOUCH = 30
 
 /** 부딪히는 가구 하나: 바닥 자리 + 높이 범위 */
-export type Solid = { id: string; rect: Rect; lo: number; hi: number }
+export type Solid = { id: string; item: FurnitureLibraryItem; rect: Rect; lo: number; hi: number }
+
+/** 책상·식탁 밑으로 밀어 넣는 앉는 가구 (의자·스툴·식탁 벤치) */
+const SEAT_SHAPES = ['chair', 'officeChair', 'gamingChair', 'stool']
+const SEAT_IDS = ['bench', 'bench-cushion']
+export const isSeat = (i: FurnitureLibraryItem) => SEAT_SHAPES.includes(i.shape) || SEAT_IDS.includes(i.id)
+
+/** 밑이 비어 있어서 의자가 들어가는 가구 (책상·식탁·테이블·아일랜드·화장대) */
+const OPEN_SHAPES = ['table', 'roundTable', 'desk', 'standingDesk', 'panelDesk', 'panelLegDesk', 'counter', 'vanity']
+export const isOpenUnder = (i: FurnitureLibraryItem) => OPEN_SHAPES.includes(i.shape) && !SEAT_IDS.includes(i.id)
+
+/**
+ * 겹쳐도 되는 짝인가: 의자는 책상·식탁 밑으로 들어가고, 책상 위 물건(컴퓨터 등)에도 막히지 않는다.
+ * (의자끼리, 책상끼리, 의자와 소파·수납장 등은 그대로 막는다)
+ */
+export const canOverlap = (a: FurnitureLibraryItem, b: FurnitureLibraryItem) =>
+  (isSeat(a) && (isOpenUnder(b) || !!b.onTop)) || (isSeat(b) && (isOpenUnder(a) || !!a.onTop))
 
 /** 가구가 바닥에서 차지하는 자리 */
 export function rectOf(f: FurnitureInstance, item: FurnitureLibraryItem): Rect {
@@ -22,7 +38,7 @@ export function solidsOf(project: Project, exclude: string[]): Solid[] {
     const item = resolveItem(f)
     if (!item || isPassable(item) || exclude.includes(f.id)) return []
     const lo = bottomOf(item, project.wallHeight)
-    return [{ id: f.id, rect: rectOf(f, item), lo, hi: lo + item.height }]
+    return [{ id: f.id, item, rect: rectOf(f, item), lo, hi: lo + item.height }]
   })
 }
 
@@ -33,9 +49,9 @@ export const heightsOverlap = (aLo: number, aHi: number, bLo: number, bHi: numbe
  * box를 (dx, dy)만큼 옮기되, 다른 가구에 막히면 딱 닿는 자리에서 멈춘다. 가로 먼저, 그다음 세로.
  * 처음부터 겹쳐 있던 가구는 무시한다 (겹친 채 놓인 가구도 빠져나올 수 있게).
  */
-export function limitMove(box: Rect, lo: number, hi: number, dx: number, dy: number, solids: Solid[]) {
+export function limitMove(mover: FurnitureLibraryItem, box: Rect, lo: number, hi: number, dx: number, dy: number, solids: Solid[]) {
   const b = { ...box }
-  const blockers = solids.filter((o) => heightsOverlap(lo, hi, o.lo, o.hi))
+  const blockers = solids.filter((o) => heightsOverlap(lo, hi, o.lo, o.hi) && !canOverlap(mover, o.item))
   const over = (a0: number, a1: number, b0: number, b1: number) => Math.min(a1, b1) - Math.max(a0, b0) > 1
   // 가로로 움직이기
   for (const { rect: o } of blockers) {
