@@ -258,6 +258,19 @@ const builders: Record<ShapeId, Builder> = {
     return parts
   },
 
+  // 판다리 책상: 컴퓨터 책상과 같은 상판에, 다리만 양옆 통판으로 + 뒤쪽 가림판
+  panelLegDesk: (W, D, H) => {
+    const top = 30 // 상판 두께 (컴퓨터 책상과 같다)
+    const t = Math.min(30, W * 0.03) // 옆판 두께
+    const ph = H - top // 옆판 높이
+    const mh = Math.min(350, ph * 0.45) // 가림판 높이
+    return [
+      box('main', 0, H - top / 2, 0, W, top, D), // 상판
+      ...[-1, 1].map((s) => box('main', s * (W / 2 - t / 2), ph / 2, 0, t, ph, D)), // 옆판 다리
+      box('main', 0, ph - mh / 2, -D / 2 + 60, W - 2 * t, mh, 18), // 가림판
+    ]
+  },
+
   // 판다리 유리 책상: 양옆이 통판 다리, 위는 색유리 상판, 다리 사이에 가림판
   panelDesk: (W, D, H) => {
     const g = 12 // 유리 두께
