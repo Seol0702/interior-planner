@@ -6,8 +6,8 @@ import Icon from '../icons'
 import { distance, fmtLength, lengthParts, type Measurement } from '../measure'
 import NumberField from './NumberField'
 
-/** 속성 카드의 공통 틀: 제목 + 닫기 + 내용 + 삭제 */
-function Card({ title, sub, onClose, onDelete, children }: { title: string; sub?: string; onClose: () => void; onDelete: () => void; children: ReactNode }) {
+/** 속성 카드의 공통 틀: 제목 + 닫기 + 내용 + (고정) + 삭제 */
+function Card({ title, sub, onClose, onDelete, children, locked, onToggleLock }: { title: string; sub?: string; onClose: () => void; onDelete: () => void; children: ReactNode; locked?: boolean; onToggleLock?: () => void }) {
   return (
     <section className="inspector" aria-label={`선택한 ${title}`}>
       <div className="inspector-head">
@@ -21,7 +21,13 @@ function Card({ title, sub, onClose, onDelete, children }: { title: string; sub?
       </div>
       {children}
       <div className="inspector-actions">
-        <button className="btn danger sm" onClick={onDelete} title="Delete">
+        {onToggleLock && (
+          <button className={`btn sm ${locked ? 'lock-on' : ''}`} onClick={onToggleLock} title="L" aria-pressed={!!locked}>
+            <Icon name={locked ? 'lock' : 'unlock'} size={15} />
+            {locked ? '고정됨' : '고정'}
+          </button>
+        )}
+        <button className="btn danger sm" onClick={onDelete} title="Delete" disabled={!!locked}>
           <Icon name="trash" size={15} />
           삭제
         </button>
@@ -34,15 +40,16 @@ type WallItemProps = {
   item: WallItem
   room: RoomShape
   onChange: (patch: Partial<WallItem>) => void
+  onToggleLock: () => void
   onDelete: () => void
   onClose: () => void
 }
 
 /** 선택한 문·창문·콘센트 카드 */
-export function WallItemCard({ item, room, onChange, onDelete, onClose }: WallItemProps) {
+export function WallItemCard({ item, room, onChange, onToggleLock, onDelete, onClose }: WallItemProps) {
   const length = edgeLength(room, item.side)
   return (
-    <Card title={KIND_NAME[item.kind]} sub={room.name} onClose={onClose} onDelete={onDelete}>
+    <Card title={KIND_NAME[item.kind]} sub={room.name} onClose={onClose} onDelete={onDelete} locked={item.locked} onToggleLock={onToggleLock}>
       <label className="field">
         붙은 벽
         <select value={item.side} onChange={(e) => onChange({ side: e.target.value as Side })}>

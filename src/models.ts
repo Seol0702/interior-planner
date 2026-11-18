@@ -3,6 +3,7 @@
 // 의자·침대 같은 모양이 나오고, 치수(W×D×H)를 바꾸면 모양이 따라 바뀐다(파라메트릭).
 import type { ShapeId } from './types'
 import { shade } from './colors'
+import { POSE_IDS, poseLimbs } from './poses'
 
 /** 부품의 색 역할 */
 export type Tone =
@@ -69,7 +70,23 @@ const legs = (tone: Tone, lx: number, lz: number, h: number, t: number): Part[] 
 
 type Builder = (W: number, D: number, H: number) => Part[]
 
+/** 사람 모형: 자세의 둥근 몸 토막들을 길쭉한 공 부품으로 */
+const poseBuilder = (id: (typeof POSE_IDS)[number]): Builder => (_W, _D, H) =>
+  poseLimbs(id, H).map((l) => turned(blob('main', l.c[0], l.c[1], l.c[2], l.size[0], l.size[1], l.size[2]), l.rot))
+
 const builders: Record<ShapeId, Builder> = {
+  ...(Object.fromEntries(POSE_IDS.map((id) => [id, poseBuilder(id)])) as Record<(typeof POSE_IDS)[number], Builder>),
+
+  // 천장 형광등: 천장에 붙는 판 + 형광관(폭에 따라 1~2개) + 양 끝 소켓 (부품 좌표 0~H, 그릴 때 천장 높이에 맞춰 올림)
+  fluorescent: (W, D, H) => {
+    const tubes = D >= 220 ? [-D * 0.22, D * 0.22] : [0]
+    return [
+      box('main', 0, H - 15, 0, W, 30, D), // 천장 판
+      ...[-1, 1].map((s) => box('main', s * (W / 2 - 25), H * 0.45, 0, 50, H * 0.7, D * 0.9)), // 소켓
+      ...tubes.map((z) => cyl('glow', 0, H * 0.4, z, Math.min(40, D * 0.25), W - 100, 'x')), // 형광관
+    ]
+  },
+
   box: (W, D, H) => [box('main', 0, H / 2, 0, W, H, D)],
 
   chair: (W, D, H) => {

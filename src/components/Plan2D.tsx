@@ -284,13 +284,7 @@ export default function Plan2D(props: Props) {
         const r = Math.min(fs * 0.5, fp.w * 0.3, fp.d * 0.3)
         const cx = f.x + fp.w / 2 - r * 1.2
         const cy = f.y - fp.d / 2 + r * 1.2
-        return (
-          <g key={`lock-${f.id}`} pointerEvents="none">
-            <circle cx={cx} cy={cy} r={r} fill="#f59e0b" stroke="#fff" strokeWidth={r * 0.15} />
-            <rect x={cx - r * 0.42} y={cy - r * 0.05} width={r * 0.84} height={r * 0.6} rx={r * 0.08} fill="#fff" />
-            <path d={`M ${cx - r * 0.26} ${cy - r * 0.05} v ${-r * 0.2} a ${r * 0.26} ${r * 0.26} 0 0 1 ${r * 0.52} 0 v ${r * 0.2}`} fill="none" stroke="#fff" strokeWidth={r * 0.14} />
-          </g>
-        )
+        return <LockBadge key={`lock-${f.id}`} cx={cx} cy={cy} r={r} />
       })}
 
       {/* 문·창문·콘센트 */}
@@ -309,6 +303,15 @@ export default function Plan2D(props: Props) {
             onPointerDown={(e, x, y) => start(e, 'wallItem', item.id, x, y)}
           />
         )
+      })}
+
+      {/* 고정된 문·창문·콘센트: 방 안쪽에 자물쇠 표시 */}
+      {wallItems.map((item) => {
+        const room = item.locked ? rooms.find((r) => r.id === item.roomId) : undefined
+        if (!room || !(item.kind === 'outlet' ? visible.electric : visible.walls)) return null
+        const s = wallItemSpan(item, room)
+        const r = fs * 0.4
+        return <LockBadge key={`lock-${item.id}`} cx={s.cx - s.nx * fs * 1.1} cy={s.cy - s.ny * fs * 1.1} r={r} />
       })}
 
       {/* 전선 */}
@@ -495,6 +498,17 @@ function Dimension({ a, b, fs, live = false, selected = false }: { a: P3; b: P3;
           )}
         </g>
       )}
+    </g>
+  )
+}
+
+/** 고정 표시: 주황 동그라미 안의 자물쇠 */
+function LockBadge({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+  return (
+    <g pointerEvents="none">
+      <circle cx={cx} cy={cy} r={r} fill="#f59e0b" stroke="#fff" strokeWidth={r * 0.15} />
+      <rect x={cx - r * 0.42} y={cy - r * 0.05} width={r * 0.84} height={r * 0.6} rx={r * 0.08} fill="#fff" />
+      <path d={`M ${cx - r * 0.26} ${cy - r * 0.05} v ${-r * 0.2} a ${r * 0.26} ${r * 0.26} 0 0 1 ${r * 0.52} 0 v ${r * 0.2}`} fill="none" stroke="#fff" strokeWidth={r * 0.14} />
     </g>
   )
 }

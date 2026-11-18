@@ -46,6 +46,7 @@ export type WallItem = {
   outward?: boolean // 문: 방 바깥쪽으로 열림
   steel?: boolean // 문: 철문
   double?: boolean // 문: 양문 (가운데에서 양쪽으로 여는 두 짝)
+  locked?: boolean // 고정: 옮기기·크기 바꾸기·지우기를 막는다
 }
 
 export type Point = { x: number; y: number }
@@ -129,6 +130,15 @@ export type ShapeId =
   | 'microwave'
   | 'showerCaddy'
   | 'wallBoard'
+  | 'fluorescent'
+  | 'poseHandHip'
+  | 'poseWave'
+  | 'poseSquat'
+  | 'poseKick'
+  | 'poseBend'
+  | 'poseBridge'
+  | 'poseCrossLegged'
+  | 'poseSitLegsOut'
 
 /** 가구 라이브러리에 들어있는 "부품" (KiCad의 심볼+풋프린트 같은 것) */
 export type FurnitureLibraryItem = {

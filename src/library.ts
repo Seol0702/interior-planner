@@ -1,4 +1,5 @@
 import type { FurnitureInstance, FurnitureLibraryItem, ShapeId } from './types'
+import { POSES, POSE_IDS, poseSize } from './poses'
 
 const item = (
   id: string, name: string, category: string, shape: ShapeId,
@@ -226,6 +227,8 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('table-lamp-glass', '유리 무드등', '조명', 'lamp', 250, 250, 400, '#cfdfe8', '#fff4e0', { light: true }),
   item('pendant-large', '대형 펜던트 조명', '조명', 'pendant', 600, 600, 900, '#f4f4f2', '#fff1d6', { light: true, mount: 'ceiling' }),
   item('pendant-mini', '미니 펜던트 조명', '조명', 'pendant', 250, 250, 700, '#b08e68', '#fff1d6', { light: true, mount: 'ceiling' }),
+  item('fluorescent-2', '천장 형광등 (2등)', '조명', 'fluorescent', 1260, 300, 90, '#f2f2f0', '#fbfbf6', { light: true, mount: 'ceiling' }),
+  item('fluorescent-1', '천장 형광등 (1등)', '조명', 'fluorescent', 1260, 160, 80, '#f2f2f0', '#fbfbf6', { light: true, mount: 'ceiling' }),
   item('ceiling-light-large', '대형 천장등', '조명', 'ceilingLight', 700, 700, 100, '#e7e5e4', '#fff7e6', { light: true, mount: 'ceiling' }),
 
   // ── 아이방 ──
@@ -245,6 +248,12 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('cat-tower-small', '소형 캣타워', '반려동물', 'catTower', 450, 400, 900, '#f1ede6', '#c9b79f'),
   item('pet-bed', '강아지 방석', '반려동물', 'beanbag', 700, 550, 200, '#b39b82', '#e6dccb'),
   item('pet-house', '반려동물 하우스', '반려동물', 'petHouse', 600, 500, 550, '#e8dfd2', '#b5654a'),
+
+  // ── 소품: 사람 모형 (자세별, 키 약 170cm 기준 크기) ──
+  ...POSE_IDS.map((id) => {
+    const [w, d, h] = poseSize(id)
+    return item(`mannequin-${id}`, `사람 모형 (${POSES[id].name})`, '소품', id, w, d, h, '#efeeeb', '#efeeeb')
+  }),
 
   // ── 전기 ──
   item('power-strip', '멀티탭', '전기', 'powerStrip', 300, 60, 40, '#f4f4f5', '#dc2626', { layer: 'electric' }),

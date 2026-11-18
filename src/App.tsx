@@ -363,6 +363,8 @@ export default function App() {
 
   const changeWallItem = (id: string, patch: Partial<WallItem>) => {
     const p = latest.current
+    // 고정된 문·창문·콘센트는 고정 켜기·끄기 말고는 바꾸지 않는다
+    if (p.wallItems.find((i) => i.id === id)?.locked && !('locked' in patch)) return warnLocked()
     commit({
       ...p,
       wallItems: p.wallItems.map((i) => {
@@ -403,11 +405,18 @@ export default function App() {
   const warnLocked = () => {
     if (Date.now() - lockToastAt.current < 2000) return
     lockToastAt.current = Date.now()
-    showToast('고정된 가구예요. 고정을 풀면 옮기거나 바꿀 수 있어요 (L 키)', true)
+    showToast('고정돼 있어요. 고정을 풀면 옮기거나 바꿀 수 있어요 (L 키)', true)
   }
 
   /** 고른 가구(들) 고정 켜기·끄기: 모두 고정돼 있으면 풀고, 아니면 모두 고정 */
   const toggleLock = () => {
+    // 문·창문·콘센트
+    if (selectedWallItem) {
+      const lock = !selectedWallItem.locked
+      changeWallItem(selectedWallItem.id, { locked: lock || undefined })
+      showToast(lock ? '고정했어요' : '고정을 풀었어요')
+      return
+    }
     const ids = groupIds
     if (ids.length === 0) return
     const p = latest.current
@@ -809,6 +818,7 @@ export default function App() {
       return
     }
     if (selection.type === 'furniture' && anyLocked([selection.id])) return warnLocked()
+    if (selection.type === 'wallItem' && p.wallItems.find((i) => i.id === selection.id)?.locked) return warnLocked()
     const without = <T extends { id: string }>(list: T[]) => list.filter((o) => o.id !== selection.id)
     if (selection.type === 'furniture') commit({ ...p, furniture: without(p.furniture) })
     if (selection.type === 'wallItem') commit({ ...p, wallItems: without(p.wallItems) })
@@ -1201,6 +1211,7 @@ export default function App() {
               item={selectedWallItem}
               room={wallItemRoom}
               onChange={(patch) => changeWallItem(selectedWallItem.id, patch)}
+              onToggleLock={toggleLock}
               onDelete={deleteSelected}
               onClose={deselect}
             />
