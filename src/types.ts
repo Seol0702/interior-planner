@@ -116,6 +116,13 @@ export type ShapeId =
   | 'steelShelf'
   | 'panelLegDesk'
   | 'fridgeTopFreezer'
+  | 'glassCabinet'
+  | 'wineCellar'
+  | 'topLoader'
+  | 'vacuumStand'
+  | 'speaker'
+  | 'petHouse'
+  | 'partsCabinet'
 
 /** 가구 라이브러리에 들어있는 "부품" (KiCad의 심볼+풋프린트 같은 것) */
 export type FurnitureLibraryItem = {

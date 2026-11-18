@@ -258,6 +258,134 @@ const builders: Record<ShapeId, Builder> = {
     return parts
   },
 
+  // 유리 진열장: 틀 + 선반 + 유리문 (안쪽 선반이 비쳐 보인다)
+  glassCabinet: (W, D, H) => {
+    const t = 25
+    const base = Math.min(80, H * 0.06)
+    const n = Math.max(1, Math.round((H - base) / 380) - 1) // 선반 개수
+    const doors = Math.max(1, Math.round(W / 450))
+    const dw = (W - 2 * t) / doors
+    const ih = H - base - 2 * t // 안쪽 높이
+    const parts: Part[] = [
+      ...[-1, 1].map((s) => box('main', s * (W / 2 - t / 2), H / 2, 0, t, H, D)), // 옆판
+      box('main', 0, H - t / 2, 0, W, t, D), // 윗판
+      box('main', 0, base / 2 + t / 2, 0, W - 2 * t, base + t, D), // 바닥판·받침
+      box('main', 0, H / 2, -D / 2 + 8, W - 2 * t, H - t, 16), // 뒤판
+    ]
+    for (let i = 1; i <= n; i++) parts.push(box('accent', 0, base + t + (ih * i) / (n + 1), -10, W - 2 * t, 10, D - 50)) // 유리 선반
+    for (let i = 0; i < doors; i++) {
+      const x = -W / 2 + t + dw * (i + 0.5)
+      parts.push(box('glass', x, base + t + ih / 2, D / 2 - 8, dw - 12, ih - 10, 6)) // 유리문
+      parts.push(box('main', x - dw / 2 + 5, base + t + ih / 2, D / 2 - 8, 10, ih, 10)) // 문틀
+      parts.push(box('metal', x + (i % 2 === 0 ? dw / 2 - 30 : -dw / 2 + 30), base + t + ih * 0.5, D / 2, 12, 160, 14)) // 손잡이
+    }
+    return parts
+  },
+
+  // 와인셀러: 본체 + 칸마다 누운 와인병 + 짙은 유리문 + 손잡이
+  wineCellar: (W, D, H) => {
+    const racks = Math.max(2, Math.floor((H - 160) / 120))
+    const per = Math.max(2, Math.floor((W - 60) / 90)) // 한 칸에 눕힌 병 수
+    const t = 30 // 틀 두께 (속이 비어 있어야 유리문 너머로 병이 보인다)
+    const parts: Part[] = [
+      ...[-1, 1].map((s) => box('main', s * (W / 2 - t / 2), H / 2, 0, t, H, D)), // 옆판
+      box('main', 0, H - t / 2, 0, W, t, D), // 윗판
+      box('main', 0, 30, 0, W, 60, D), // 아랫부분
+      box('dark', 0, H / 2, -D / 2 + 10, W - 2 * t, H - t, 20), // 안쪽 뒤판
+    ]
+    for (let r = 0; r < racks; r++) {
+      const y = 90 + ((H - 180) * r) / (racks - 1)
+      parts.push(box('wood', 0, y, 0, W - 60, 12, D - 80)) // 나무 선반
+      for (let b = 0; b < per; b++) parts.push(cyl('leaf', -W / 2 + 30 + ((W - 60) * (b + 0.5)) / per, y + 45, 0, 70, D - 120, 'z')) // 와인병
+    }
+    parts.push(box('glass', 0, H / 2 + 10, D / 2 - 6, W - 30, H - 60, 8)) // 짙은 유리문
+    parts.push(box('screen', 0, H - 30, D / 2 - 2, 80, 20, 4)) // 온도 표시
+    parts.push(box('metal', W / 2 - 40, H / 2, D / 2 + 2, 14, H * 0.5, 16)) // 손잡이
+    return parts
+  },
+
+  // 통돌이 세탁기: 본체 + 위로 여는 뚜껑(유리창) + 뒤쪽 조작부
+  topLoader: (W, D, H) => {
+    const body = H - 70 // 본체 높이 (위에 조작부가 솟아 있다)
+    return [
+      box('main', 0, body / 2 + 20, 0, W, body - 40, D), // 본체
+      box('dark', 0, 10, 0, W - 60, 20, D - 60), // 받침
+      box('accent', 0, body + 8, 40, W - 50, 16, D - 220), // 뚜껑
+      box('glass', 0, body + 17, 40, W * 0.55, 4, (D - 220) * 0.6), // 뚜껑 유리창
+      box('main', 0, body + 35, -D / 2 + 70, W, 70, 140), // 뒤쪽 조작부
+      box('screen', 0, body + 40, -D / 2 + 141, W * 0.4, 30, 4), // 표시창
+    ]
+  },
+
+  // 무선청소기 거치대: 받침판 + 세운 기둥 + 걸어 둔 청소기(본체·막대·바닥 솔)
+  vacuumStand: (W, D, H) => [
+    box('main', 0, 10, 0, W, 20, D), // 받침판
+    box('main', 0, H / 2, -D / 2 + 30, 40, H, 30), // 기둥
+    box('dark', 0, 40, D / 2 - 70, W * 0.85, 40, 100), // 바닥 솔
+    cyl('metal', 0, 60 + (H * 0.55) / 2, -D / 2 + 80, 34, H * 0.55), // 막대
+    cyl('accent', 0, H * 0.72, -D / 2 + 90, 90, 240), // 청소기 본체(먼지통)
+    box('dark', 0, H - 70, -D / 2 + 90, 40, 140, 40), // 손잡이
+  ],
+
+  // 스탠드 스피커: 통 + 앞 그릴 + 울림판(우퍼 2개·트위터)
+  speaker: (W, D, H) => [
+    box('main', 0, H / 2, 0, W, H, D),
+    box('dark', 0, H / 2, D / 2 + 1, W - 20, H - 20, 4), // 그릴
+    cyl('accent', 0, H * 0.28, D / 2 + 5, W * 0.72, 8, 'z'), // 우퍼
+    cyl('accent', 0, H * 0.55, D / 2 + 5, W * 0.62, 8, 'z'), // 우퍼
+    cyl('metal', 0, H * 0.8, D / 2 + 5, W * 0.26, 8, 'z'), // 트위터
+  ],
+
+  // 반려동물 하우스: 벽 + 계단식 지붕 + 둥근 출입구
+  petHouse: (W, D, H) => {
+    const wallH = H * 0.6
+    const roofH = H - wallH
+    const parts: Part[] = [box('main', 0, wallH / 2, 0, W, wallH, D)]
+    for (let i = 0; i < 4; i++) parts.push(box('accent', 0, wallH + (roofH * (i + 0.5)) / 4, 0, W * (1.06 - i * 0.26), roofH / 4, D + 30)) // 지붕
+    parts.push(box('dark', 0, wallH * 0.32, D / 2 + 1, W * 0.42, wallH * 0.64, 6)) // 출입구
+    parts.push(cyl('dark', 0, wallH * 0.64, D / 2 + 1, W * 0.42, 6, 'z')) // 출입구 둥근 윗부분
+    return parts
+  },
+
+  // 대형 부품 보관함: 철제 틀 + 작은 투명 서랍이 바둑판처럼 (가운데 칸막이로 위·아래 두 덩어리) + 밝은 옆판 + 바퀴
+  partsCabinet: (W, D, H) => {
+    const f = 40 // 틀 두께
+    const wheel = Math.min(110, H * 0.07) // 바퀴 높이
+    const bar = 30 // 가운데 칸막이
+    const cols = Math.max(2, Math.round((W - 2 * f) / 115))
+    const half = Math.max(2, Math.round((H - wheel - 2 * f - bar) / 2 / 90)) // 한 덩어리의 서랍 줄 수
+    const cw = (W - 2 * f) / cols
+    const bankH = (H - wheel - 2 * f - bar) / 2
+    const rh = bankH / half
+    const parts: Part[] = [
+      ...[-1, 1].map((s) => box('main', s * (W / 2 - f / 2), wheel + (H - wheel) / 2, 0, f, H - wheel, D)), // 옆 틀
+      ...[-1, 1].map((s) => box('accent', s * (W / 2 + 1), wheel + (H - wheel) / 2, 0, 2, H - wheel - 80, D - 60)), // 밝은 옆판
+      box('main', 0, H - f / 2, 0, W, f, D), // 윗판
+      box('main', 0, wheel + f / 2, 0, W, f, D), // 아랫판
+      box('dark', 0, wheel + (H - wheel) / 2, -D / 2 + 10, W - 2 * f, H - wheel - 2 * f, 20), // 안쪽 뒤판
+      box('accent', 0, wheel + f + bankH + bar / 2, D / 2 - 15, W - 2 * f, bar, 30), // 가운데 칸막이
+    ]
+    for (let bank = 0; bank < 2; bank++) {
+      const y0 = wheel + f + bank * (bankH + bar)
+      for (let r = 0; r < half; r++) {
+        const y = y0 + rh * (r + 0.5)
+        for (let c = 0; c < cols; c++) {
+          const x = -W / 2 + f + cw * (c + 0.5)
+          parts.push(box('glass', x, y, D / 2 - 30, cw - 8, rh - 8, 50)) // 투명 서랍
+          parts.push(box('white', x, y + rh / 2 - 14, D / 2 - 3, cw - 16, 8, 4)) // 이름표 칸
+        }
+      }
+    }
+    // 바퀴 4개 (모서리) + 받침
+    for (const sx of [-1, 1]) {
+      for (const sz of [-1, 1]) {
+        parts.push(cyl('dark', sx * (W / 2 - 60), wheel / 2, sz * (D / 2 - 50), wheel * 0.8, 30, 'x'))
+        parts.push(box('metal', sx * (W / 2 - 60), wheel - 6, sz * (D / 2 - 50), 40, 12, 40))
+      }
+    }
+    return parts
+  },
+
   // 소형 2도어 냉장고: 위 냉동실(작은 문) + 아래 냉장실(큰 문). 문 사이 틈과 손잡이
   fridgeTopFreezer: (W, D, H) => {
     const foot = 30 // 바닥과 띄운 높이

@@ -68,7 +68,6 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('fridge', '양문형 냉장고', '주방', 'fridge', 900, 900, 1800, '#8d939b', '#b8bec6'),
   item('fridge-small', '일반 냉장고', '주방', 'fridge', 600, 650, 1700, '#eceef0', '#f6f7f8'),
   item('fridge-2door-small', '소형 2도어 냉장고 (냉동·냉장)', '주방', 'fridgeTopFreezer', 480, 550, 1250, '#eceef0', '#f6f7f8'),
-  item('kimchi-fridge', '스탠드 김치냉장고', '주방', 'drawers', 700, 750, 1800, '#d8d4cc', '#ecebe7'),
 
   // ── 가전 ──
   item('washer', '세탁기', '가전', 'washer', 600, 650, 850, '#eceef0', '#cfd4da'),
@@ -113,7 +112,7 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('floor-cushion', '좌식 방석', '거실', 'beanbag', 600, 600, 150, '#d9cbb6', '#ebe1d1'),
   item('tv-stand-long', '와이드 TV장 + TV', '거실', 'tvUnit', 2000, 400, 1300, '#f1efe9', '#f7f6f2'),
   item('tv-75', '75인치 TV + 거실장', '거실', 'tvUnit', 2400, 450, 1500, '#5b4636', '#7a604b'),
-  item('display-cabinet', '유리 진열장', '거실', 'wardrobe', 800, 400, 1800, '#3f3f46', '#cfdfe8'),
+  item('display-cabinet', '유리 진열장', '거실', 'glassCabinet', 800, 400, 1800, '#3f3f46', '#cfdfe8'),
   item('rug-large', '대형 러그', '거실', 'rug', 2400, 1700, 12, '#bfb3a3', '#d9cfc1'),
   item('rug-small', '소형 러그', '거실', 'rug', 1200, 800, 12, '#9fb3c8', '#c4d2e0'),
   item('plant-small', '소형 화분', '거실', 'plant', 300, 300, 600, '#f1ede6', '#6f9a62'),
@@ -174,7 +173,7 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('pantry', '키큰장 (팬트리)', '주방', 'wardrobe', 600, 600, 2100, '#f1efe9', '#f7f6f2'),
   item('microwave-rack', '전자레인지 수납장', '주방', 'cubeShelf', 600, 400, 1200, '#f4f4f2', '#9fb3c8'),
   item('fridge-4door', '4도어 냉장고', '주방', 'fridge', 920, 920, 1850, '#e9e4dc', '#f4f1ec'),
-  item('wine-fridge', '와인셀러', '주방', 'tower', 500, 550, 850, '#27272a', '#52525b'),
+  item('wine-fridge', '와인셀러', '주방', 'wineCellar', 500, 550, 850, '#27272a', '#8a96a3'),
 
   // ── 욕실 ──
   item('bathtub', '욕조', '욕실', 'bathtub', 1500, 750, 550, '#f6f6f4', '#a9d3ee'),
@@ -184,15 +183,15 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('laundry-basket', '빨래 바구니', '욕실', 'puck', 400, 400, 550, '#d9c7ad', '#c4ae90'),
 
   // ── 가전 ──
-  item('washer-top', '통돌이 세탁기', '가전', 'tower', 600, 620, 980, '#eceef0', '#cfd4da'),
+  item('washer-top', '통돌이 세탁기', '가전', 'topLoader', 600, 620, 980, '#eceef0', '#cfd4da'),
   item('air-purifier-large', '대형 공기청정기', '가전', 'tower', 450, 450, 900, '#e9e4dc', '#d6cfc3'),
   item('dehumidifier', '제습기', '가전', 'tower', 400, 300, 650, '#f4f4f2', '#d4d4d8'),
   item('humidifier', '가습기', '가전', 'puck', 300, 300, 400, '#f4f4f2', '#a9d3ee'),
   item('circulator', '서큘레이터', '가전', 'fan', 300, 300, 500, '#f4f4f2', '#e4e4e7'),
   item('aircon-2in1', '투인원 스탠드 에어컨', '가전', 'tower', 450, 450, 1850, '#e9e4dc', '#f4f1ec'),
   item('styler-mini', '미니 의류관리기', '가전', 'wardrobe', 400, 550, 1200, '#cfc8bc', '#e2ddd3'),
-  item('vacuum-station', '무선청소기 거치대', '가전', 'tower', 300, 300, 1200, '#e4e4e7', '#71717a'),
-  item('speaker', '스탠드 스피커', '가전', 'tower', 250, 300, 1000, '#27272a', '#3f3f46'),
+  item('vacuum-station', '무선청소기 거치대', '가전', 'vacuumStand', 300, 300, 1200, '#e4e4e7', '#71717a'),
+  item('speaker', '스탠드 스피커', '가전', 'speaker', 250, 300, 1000, '#27272a', '#52525b'),
   item('water-purifier', '스탠드 정수기', '가전', 'tower', 300, 400, 1300, '#f4f4f2', '#a9d3ee'),
   item('water-cooler', '생수통 정수기', '가전', 'waterCooler', 320, 340, 1400, '#f1f1ef', '#8cc4ea'),
 
@@ -207,6 +206,7 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('steel-open-cabinet-wide', '오픈 철제 캐비닛 (와이드)', '수납', 'openCabinet', 1200, 450, 1800, '#3f4349', '#2f3237'),
   item('wood-open-cabinet', '원목 오픈 수납장', '수납', 'openCabinet', 800, 350, 1200, '#b08e68', '#c9ad8a'),
   item('steel-angle-shelf', '철제 앵글 선반', '수납', 'steelShelf', 900, 450, 1800, '#8d939b', '#c3c7cc'),
+  item('parts-cabinet', '대형 부품 보관함 (투명 서랍)', '수납', 'partsCabinet', 1000, 300, 1600, '#4a4f57', '#d4d8dd'),
   item('open-shelf', '오픈 선반', '수납', 'bookshelf', 900, 350, 1200, '#3f3f46', '#3f3f46'),
   item('shoe-cabinet-tall', '키큰 신발장', '수납', 'wardrobe', 900, 380, 2000, '#efe9df', '#f7f3ec'),
   item('shoe-rack', '신발 선반', '수납', 'cubeShelf', 800, 300, 800, '#c9a67a', '#a58a6d'),
@@ -238,7 +238,7 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   // ── 반려동물 ──
   item('cat-tower-small', '소형 캣타워', '반려동물', 'catTower', 450, 400, 900, '#f1ede6', '#c9b79f'),
   item('pet-bed', '강아지 방석', '반려동물', 'beanbag', 700, 550, 200, '#b39b82', '#e6dccb'),
-  item('pet-house', '반려동물 하우스', '반려동물', 'box', 600, 500, 550, '#e8dfd2', '#e8dfd2'),
+  item('pet-house', '반려동물 하우스', '반려동물', 'petHouse', 600, 500, 550, '#e8dfd2', '#b5654a'),
 
   // ── 전기 ──
   item('power-strip', '멀티탭', '전기', 'powerStrip', 300, 60, 40, '#f4f4f5', '#dc2626', { layer: 'electric' }),
