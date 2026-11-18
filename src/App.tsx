@@ -36,7 +36,7 @@ import DrcPanel from './components/DrcPanel'
 import NotesPanel from './components/NotesPanel'
 import RecommendPanel from './components/RecommendPanel'
 import SelectionPanel from './components/SelectionPanel'
-import { NoteCard, WallItemCard, WireCard } from './components/ItemCard'
+import { GroupCard, NoteCard, WallItemCard, WireCard } from './components/ItemCard'
 import type { ViewRequest } from './components/CameraRig'
 
 const BODY_KEY = 'interior-planner:body-height'
@@ -85,7 +85,9 @@ const layerFlags = (layer: LayerView) => ({
 export default function App() {
   // useState: 화면에 영향을 주는 값. 바뀌면 화면이 자동으로 다시 그려진다
   const [project, setProject] = useState<Project>(loadFromBrowser) // 처음 켤 때 자동 저장분 불러오기
-  const [selection, setSelection] = useState<Selection>(null)
+  const [selection, setSelectionOnly] = useState<Selection>(null)
+  const [multi, setMulti] = useState<string[]>([]) // Ctrl+클릭으로 함께 고른 가구들 (2개 이상일 때만)
+  const clipboard = useRef<{ items: FurnitureInstance[]; pastes: number } | null>(null) // Ctrl+C로 복사한 가구
   const [guides, setGuides] = useState<Guide[]>([]) // 지금 떠 있는 스마트 가이드
   const [mode, setMode] = useState<ViewMode>('3d')
   const [viewRequest, setViewRequest] = useState<ViewRequest | null>(null)
@@ -113,6 +115,18 @@ export default function App() {
     setProject(next)
   }
 
+  /** 하나만 고르기 (함께 고른 무리는 풀린다) */
+  const setSelection = (next: Selection) => {
+    setSelectionOnly(next)
+    setMulti([])
+  }
+
+  /** 가구 여러 개를 한꺼번에 고르기 */
+  const selectMany = (ids: string[]) => {
+    setSelectionOnly(ids.length ? { type: 'furniture', id: ids[ids.length - 1] } : null)
+    setMulti(ids.length >= 2 ? ids : [])
+  }
+
   // project가 바뀔 때마다 브라우저에 자동 저장
   useEffect(() => saveToBrowser(project), [project])
 
@@ -136,6 +150,9 @@ export default function App() {
   const selectedWallItem = find('wallItem', wallItems)
   const selectedWire = find('wire', wires)
   const selectedNote = find('note', notes)
+  // 지금 고른 가구들 (Ctrl로 여러 개 골랐으면 전부, 아니면 하나)
+  const groupIds = multi.length >= 2 ? multi.filter((id) => furniture.some((f) => f.id === id)) : selectedFurniture ? [selectedFurniture.id] : []
+  const multiSelected = groupIds.length >= 2
 
   // useMemo: 계산이 무거운 값은 재료(rooms 등)가 바뀔 때만 다시 계산
   const pieces = useMemo(() => wallPieces(rooms), [rooms])
@@ -331,9 +348,15 @@ export default function App() {
     const item = f && resolveItem(f)
     if (!f || !item) return
     const { w, d } = footprint(item, f.rotation)
-    const others = p.furniture.filter((o) => o.id !== id).map(boxOf).filter((b): b is Box => b !== null)
+    const members = multi.length >= 2 && multi.includes(id) ? multi : [id] // 함께 고른 무리 중 하나를 끌면 무리째
+    const others = p.furniture.filter((o) => !members.includes(o.id)).map(boxOf).filter((b): b is Box => b !== null)
     const snapped = smartSnap({ x: wantX, y: wantY, w, d }, others, p.rooms.map(roomRect))
     const target = { ...f, x: snapped.x ?? snap(wantX), y: snapped.y ?? snap(wantY) }
+    if (members.length >= 2) {
+      const moved = shiftGroup(members, target.x - f.x, target.y - f.y)
+      setGuides(snapped.guides.filter((g) => (g.axis === 'x' ? moved.dx === target.x - f.x : moved.dy === target.y - f.y)))
+      return
+    }
     const placed = placeInPlan(target, item, p.rooms)
     // 벽에 막혀서 붙으려던 자리에 못 갔으면 그 축의 안내선은 지운다
     setGuides(
@@ -346,8 +369,96 @@ export default function App() {
     }
   }
 
+  /**
+   * 가구 무리를 함께 (dx, dy)만큼 옮긴다. 하나라도 벽에 막히면 무리 전체가 거기서 멈춘다 (모양이 흐트러지지 않게)
+   * 돌려주는 값: 실제로 옮긴 거리
+   */
+  const shiftGroup = (ids: string[], dx: number, dy: number) => {
+    const p = latest.current
+    // 원하는 만큼(want) 중 실제로 갈 수 있는 만큼(got): 방향이 반대로 밀리면 0
+    const limit = (want: number, got: number) => (want === 0 || Math.sign(got) !== Math.sign(want) ? 0 : Math.abs(got) < Math.abs(want) ? got : want)
+    let ex = dx
+    let ey = dy
+    for (const f of p.furniture) {
+      const item = ids.includes(f.id) ? resolveItem(f) : undefined
+      if (!item) continue
+      const placed = placeInPlan({ ...f, x: f.x + dx, y: f.y + dy }, item, p.rooms)
+      ex = limit(ex, placed.x - f.x)
+      ey = limit(ey, placed.y - f.y)
+    }
+    if (ex !== 0 || ey !== 0) {
+      commit({ ...p, furniture: p.furniture.map((f) => (ids.includes(f.id) ? { ...f, x: f.x + ex, y: f.y + ey } : f)) })
+    }
+    return { dx: ex, dy: ey }
+  }
+
+  /** 고른 가구 무리를 가운데를 축으로 90° 돌린다 (가구끼리의 배치는 그대로) */
+  const rotateGroup = () => {
+    const p = latest.current
+    const members = p.furniture.filter((f) => groupIds.includes(f.id))
+    const xs = members.map((f) => f.x)
+    const ys = members.map((f) => f.y)
+    const cx = (Math.min(...xs) + Math.max(...xs)) / 2
+    const cy = (Math.min(...ys) + Math.max(...ys)) / 2
+    commit({
+      ...p,
+      furniture: p.furniture.map((f) => {
+        const item = groupIds.includes(f.id) ? resolveItem(f) : undefined
+        if (!item) return f
+        // 평면도는 y가 아래쪽이라, (x, y) → (-y, x)가 시계 방향 90°
+        const turned = { ...f, x: snap(cx - (f.y - cy)), y: snap(cy + (f.x - cx)), rotation: (f.rotation + 90) % 360 }
+        return placeInPlan(turned, item, p.rooms)
+      }),
+    })
+  }
+
+  /** 가구들을 같은 색·크기·방향 그대로 offset만큼 비켜서 붙여 넣고, 붙여 넣은 것들을 고른다 */
+  const pasteFurniture = (items: FurnitureInstance[], offset: number) => {
+    const p = latest.current
+    const copies = items.flatMap((f) => {
+      const item = resolveItem(f)
+      return item ? [placeInPlan({ ...f, id: newId(), x: f.x + offset, y: f.y + offset }, item, p.rooms)] : []
+    })
+    if (copies.length === 0) return
+    commit({ ...p, furniture: [...p.furniture, ...copies] })
+    selectMany(copies.map((c) => c.id))
+  }
+
+  /** Ctrl+C: 고른 가구(들)를 기억해 둔다 */
+  const copySelected = () => {
+    const items = latest.current.furniture.filter((f) => groupIds.includes(f.id))
+    if (items.length === 0) return
+    clipboard.current = { items, pastes: 0 }
+    showToast(`가구 ${items.length}개를 복사했어요 · Ctrl+V로 붙여 넣기`)
+  }
+
+  /** Ctrl+V: 복사한 가구를 붙여 넣는다. 여러 번 붙이면 30cm씩 더 비켜 놓는다 */
+  const pasteClipboard = () => {
+    const c = clipboard.current
+    if (!c) {
+      showToast('먼저 가구를 고르고 Ctrl+C로 복사해 주세요', true)
+      return
+    }
+    c.pastes += 1
+    pasteFurniture(c.items, 300 * c.pastes)
+  }
+
+  /** 가구 고르기. additive(Ctrl+클릭)면 무리에 더하거나 뺀다 */
+  const pick = (next: Selection, additive = false) => {
+    if (next?.type !== 'furniture') return setSelection(next)
+    if (additive) {
+      const current = groupIds.length ? groupIds : []
+      selectMany(current.includes(next.id) ? current.filter((id) => id !== next.id) : [...current, next.id])
+      return
+    }
+    // 무리 중 하나를 누르면 무리는 그대로 두고 (그대로 끌면 무리째 옮겨진다)
+    if (multi.includes(next.id)) setSelectionOnly(next)
+    else setSelection(next)
+  }
+
   const rotateSelected = () => {
-    if (selectedFurniture) changeFurniture(selectedFurniture.id, (f) => ({ ...f, rotation: (f.rotation + 90) % 360 }))
+    if (multiSelected) rotateGroup()
+    else if (selectedFurniture) changeFurniture(selectedFurniture.id, (f) => ({ ...f, rotation: (f.rotation + 90) % 360 }))
   }
 
   const duplicateSelected = () => {
@@ -416,6 +527,10 @@ export default function App() {
     }
     const dx = (forward * fx + right * -fy) * step
     const dy = (forward * fy + right * fx) * step
+    if (multiSelected) {
+      shiftGroup(groupIds, dx, dy)
+      return
+    }
     changeFurniture(selectedFurniture.id, (f) => ({ ...f, x: f.x + dx, y: f.y + dy }))
   }
 
@@ -510,6 +625,11 @@ export default function App() {
   const deleteSelected = () => {
     if (!selection || selection.type === 'room') return
     const p = latest.current
+    if (multiSelected) {
+      commit({ ...p, furniture: p.furniture.filter((f) => !groupIds.includes(f.id)) })
+      setSelection(null)
+      return
+    }
     const without = <T extends { id: string }>(list: T[]) => list.filter((o) => o.id !== selection.id)
     if (selection.type === 'furniture') commit({ ...p, furniture: without(p.furniture) })
     if (selection.type === 'wallItem') commit({ ...p, wallItems: without(p.wallItems) })
@@ -584,6 +704,22 @@ export default function App() {
       // 입력칸에 글자를 치는 중이면 단축키 무시
       const el = e.target as HTMLElement
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return
+      // Ctrl(맥은 ⌘) + C·V·A: 가구 복사·붙여넣기·모두 고르기
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !walkView && tool === 'select') {
+        // 자판 위치(code)로 보고, 없으면 글자로 (한글 모드면 ㅊ·ㅍ·ㅁ)
+        const is = (code: string, ...keys: string[]) => e.code === code || keys.includes(e.key.toLowerCase())
+        if (is('KeyC', 'c', 'ㅊ') && groupIds.length > 0 && !window.getSelection()?.toString()) {
+          e.preventDefault()
+          copySelected()
+        } else if (is('KeyV', 'v', 'ㅍ')) {
+          e.preventDefault()
+          pasteClipboard()
+        } else if (is('KeyA', 'a', 'ㅁ') && furniture.length > 0) {
+          e.preventDefault()
+          selectMany(furniture.map((f) => f.id))
+        }
+        return
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return
       // 걷기 중에는 걷기용 키만 (걷기·둘러보기 키는 WalkControls가 처리)
       if (walkView) {
@@ -732,6 +868,7 @@ export default function App() {
                   project={project}
                   pieces={pieces}
                   selection={selection}
+                  multi={multiSelected ? groupIds : []}
                   guides={guides}
                   issues={shownIssues}
                   patches={patches}
@@ -740,7 +877,7 @@ export default function App() {
                   draft={draft}
                   measure={measure}
                   onMeasure={addMeasurePoint}
-                  onSelect={setSelection}
+                  onSelect={pick}
                   onPlanClick={planClick}
                   onFinishWire={finishWire}
                   onMove={moveOnPlan}
@@ -756,6 +893,7 @@ export default function App() {
                   project={project}
                   pieces={pieces}
                   selection={selection}
+                  multi={multiSelected ? groupIds : []}
                   guides={guides}
                   issues={shownIssues}
                   visible={visible}
@@ -775,7 +913,7 @@ export default function App() {
                     setWalkView(null)
                     showToast('설 자리가 없어요. 가구 사이에 몸 폭만큼 빈 바닥이 필요해요', true)
                   }}
-                  onSelect={setSelection}
+                  onSelect={pick}
                   onFloorClick={(roomId, x, y) => (tool === 'select' ? setSelection({ type: 'room', id: roomId }) : planClick(x, y))}
                   onMoveFurniture={moveFurniture}
                   onMoveWallItem={moveWallItemOnWall}
@@ -828,7 +966,19 @@ export default function App() {
           )}
 
           {/* 선택한 것의 속성 카드 (화면 오른쪽) */}
-          {selectedFurniture && selectedItem && (
+          {multiSelected && (
+            <GroupCard
+              names={groupIds.map((id) => {
+                const f = furniture.find((o) => o.id === id)
+                return (f && resolveItem(f)?.name) ?? '가구'
+              })}
+              onRotate={rotateGroup}
+              onDuplicate={() => pasteFurniture(furniture.filter((f) => groupIds.includes(f.id)), 300)}
+              onDelete={deleteSelected}
+              onClose={deselect}
+            />
+          )}
+          {!multiSelected && selectedFurniture && selectedItem && (
             <SelectionPanel
               key={selectedFurniture.id}
               instance={selectedFurniture}

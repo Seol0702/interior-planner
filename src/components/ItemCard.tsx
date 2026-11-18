@@ -98,3 +98,49 @@ export function NoteCard({ note, onChange, onDelete, onClose }: { note: Note; on
     </Card>
   )
 }
+
+type GroupProps = {
+  names: string[] // 고른 가구 이름들
+  onRotate: () => void
+  onDuplicate: () => void
+  onDelete: () => void
+  onClose: () => void
+}
+
+/** Ctrl로 여러 개 고른 가구 카드: 한꺼번에 회전·복제·삭제 */
+export function GroupCard({ names, onRotate, onDuplicate, onDelete, onClose }: GroupProps) {
+  // 같은 이름은 묶어서 "의자 ×4"처럼
+  const counts = new Map<string, number>()
+  for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1)
+  return (
+    <section className="inspector" aria-label="여러 개 고른 가구">
+      <div className="inspector-head">
+        <div className="inspector-title">
+          <strong>가구 {names.length}개</strong>
+          <span>함께 옮기기·돌리기·지우기</span>
+        </div>
+        <button className="btn ghost icon-only" aria-label="선택 해제" onClick={onClose}>
+          <Icon name="close" size={16} />
+        </button>
+      </div>
+      <p className="group-names">
+        {[...counts].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n)).join(', ')}
+      </p>
+      <p className="hint">Ctrl+클릭으로 더 고르거나 빼고, Ctrl+C · Ctrl+V로 복사해 붙여요.</p>
+      <div className="inspector-actions">
+        <button className="btn sm" onClick={onRotate} title="R">
+          <Icon name="rotate" size={15} />
+          회전
+        </button>
+        <button className="btn sm" onClick={onDuplicate}>
+          <Icon name="copy" size={15} />
+          복제
+        </button>
+        <button className="btn danger sm" onClick={onDelete} title="Delete">
+          <Icon name="trash" size={15} />
+          삭제
+        </button>
+      </div>
+    </section>
+  )
+}

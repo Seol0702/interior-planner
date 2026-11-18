@@ -34,6 +34,7 @@ type Props = {
   project: Project
   pieces: WallPiece[]
   selection: Selection
+  multi: string[] // Ctrl로 함께 고른 가구들
   guides: Guide[]
   issues: Issue[]
   visible: Visible
@@ -50,7 +51,7 @@ type Props = {
   walkInput: RefObject<Set<WalkAction>>
   outside: Outside | null
   onWalkFail: () => void
-  onSelect: (selection: Selection) => void
+  onSelect: (selection: Selection, additive?: boolean) => void
   onFloorClick: (roomId: string, x: number, y: number) => void
   onMoveFurniture: (id: string, x: number, y: number) => void
   onMoveWallItem: (id: string, along: number, height: number) => void
@@ -157,11 +158,11 @@ export default function Scene3D(props: Props) {
             key={f.id}
             instance={f}
             item={item}
-            selected={selection?.type === 'furniture' && selection.id === f.id}
+            selected={(selection?.type === 'furniture' && selection.id === f.id) || props.multi.includes(f.id)}
             wallHeight={project.wallHeight}
             lit={lampsOn}
             interactive={interactive}
-            onSelect={() => onSelect({ type: 'furniture', id: f.id })}
+            onSelect={(additive) => onSelect({ type: 'furniture', id: f.id }, additive)}
             onMove={(x, y) => onMoveFurniture(f.id, x, y)}
             onDragEnd={onDragEnd}
           />

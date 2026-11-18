@@ -23,7 +23,8 @@ type Props = {
   draft: Point[] | null // 그리고 있는 전선
   measure: MeasureState // 줄자로 잰 것들
   onMeasure: (p: P3) => void // 줄자 도구로 점을 찍었을 때
-  onSelect: (selection: Selection) => void
+  multi: string[] // Ctrl로 함께 고른 가구들
+  onSelect: (selection: Selection, additive?: boolean) => void // additive: Ctrl+클릭 (더 고르기·빼기)
   onPlanClick: (x: number, y: number) => void // 도구(전선·메모)를 든 채로 평면을 눌렀을 때
   onFinishWire: () => void
   onMove: (type: DragType, id: string, x: number, y: number) => void
@@ -35,7 +36,7 @@ const ROUND = ['roundTable', 'stool', 'lamp', 'plant', 'ceilingLight', 'pendant'
 
 /** 위에서 내려다본 2D 평면도. 방·가구·문·창문·메모를 끌어서 옮길 수 있다 */
 export default function Plan2D(props: Props) {
-  const { project, pieces, selection, guides, issues, patches, visible, tool, draft, measure } = props
+  const { project, pieces, selection, multi, guides, issues, patches, visible, tool, draft, measure } = props
   const { onSelect, onPlanClick, onFinishWire, onMove, onDragEnd, onMeasure } = props
   const { rooms, furniture, wallItems, wires, notes } = project
   const svgRef = useRef<SVGSVGElement>(null)
@@ -50,7 +51,7 @@ export default function Plan2D(props: Props) {
   const view = frozen ?? { x: b.minX - MARGIN, y: b.minY - MARGIN, w: b.w + 2 * MARGIN, h: b.d + 2 * MARGIN }
   const fs = Math.max(view.w, view.h) / 42 // 글자 크기 (화면 범위에 비례)
   const picking = tool === 'select'
-  const isSelected = (type: string, id: string) => selection?.type === type && selection.id === id
+  const isSelected = (type: string, id: string) => (selection?.type === type && selection.id === id) || (type === 'furniture' && multi.includes(id))
 
   /** 마우스 위치 → 평면도 좌표(mm) */
   const toPlan = (e: React.PointerEvent | React.MouseEvent) => {
@@ -63,6 +64,10 @@ export default function Plan2D(props: Props) {
     // 전선·메모 도구를 들고 있을 때는 물건을 잡지 않고, 평면 클릭으로 넘긴다
     if (e.button !== 0 || !picking) return
     e.stopPropagation()
+    if (type === 'furniture' && (e.ctrlKey || e.metaKey)) {
+      onSelect({ type, id }, true) // Ctrl+클릭: 끌지 않고 고르기만
+      return
+    }
     onSelect({ type, id })
     const p = toPlan(e)
     drag.current = { type, id, dx: originX - p.x, dy: originY - p.y }
@@ -114,6 +119,7 @@ export default function Plan2D(props: Props) {
       onPointerUp={end}
       onPointerCancel={end}
       onPointerLeave={() => setAim(null)}
+      onContextMenu={(e) => e.preventDefault()} // 맥의 Ctrl+클릭이 메뉴를 띄우지 않게
       onDoubleClick={() => tool === 'wire' && onFinishWire()}
     >
       <defs>
