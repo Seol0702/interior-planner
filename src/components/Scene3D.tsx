@@ -56,7 +56,7 @@ type Props = {
   outside: Outside | null
   onWalkFail: () => void
   onSelect: (selection: Selection, additive?: boolean) => void
-  onBoxSelect: (ids: string[]) => void // Ctrl+드래그 범위로 고른 가구들
+  onBoxSelect: (ids: string[]) => void // Shift+드래그 범위로 고른 가구들
   onFloorClick: (roomId: string, x: number, y: number) => void
   onMoveFurniture: (id: string, x: number, y: number) => void
   onMoveWallItem: (id: string, along: number, height: number) => void
@@ -73,7 +73,7 @@ export default function Scene3D(props: Props) {
   const b = useMemo(() => bounds(project.rooms), [project.rooms])
   const compass = useRef<HTMLDivElement>(null)
   const measureLayer = useRef<HTMLDivElement>(null) // 줄자 길이 글자를 붙이는 층
-  const boxRect = useRef<HTMLDivElement>(null) // Ctrl+드래그 범위 고르기 사각형
+  const boxRect = useRef<HTMLDivElement>(null) // Shift+드래그 범위 고르기 사각형
   // 범위 고르기 후보: 보이는 가구의 가운데
   const candidates: BoxCandidate[] = project.furniture.flatMap((f) => {
     const item = resolveItem(f)
@@ -135,7 +135,8 @@ export default function Scene3D(props: Props) {
   }
 
   return (
-    <div className="scene">
+    // 3D 화면에서는 브라우저 우클릭 메뉴를 늘 막는다 (맥은 Ctrl+클릭이 우클릭으로 와서 메뉴가 뜨면 마우스 뗌 신호를 놓친다)
+    <div className="scene" onContextMenu={(e) => e.preventDefault()}>
     {/* onPointerMissed: 아무것도 없는 곳을 클릭하면 선택 해제 */}
     <Canvas
       shadows

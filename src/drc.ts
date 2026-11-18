@@ -136,17 +136,21 @@ export function runChecks(project: Project, pieces: WallPiece[]): Issue[] {
     }
 
     if (item.kind === 'door') {
-      // 문이 열리며 쓸고 지나가는 자리: 경첩을 중심으로 한 부채꼴 (문 폭 = 반지름)
-      const zone = zoneInFront(span, item.width, item.outward)
-      const hinge = item.flip ? span.b : span.a
-      const hx = span.horizontal ? hinge : span.line
-      const hy = span.horizontal ? span.line : hinge
+      // 문이 열리며 쓸고 지나가는 자리: 경첩을 중심으로 한 부채꼴 (문짝 폭 = 반지름). 양문은 양쪽 경첩에서 반씩
+      const leaf = item.double ? item.width / 2 : item.width
+      const zone = zoneInFront(span, leaf, item.outward)
+      const hinges = item.double ? [span.a, span.b] : [item.flip ? span.b : span.a]
       for (const p of solid) {
         if (!touches(zone, p.rect)) continue
-        // 경첩에서 가구까지의 가장 가까운 거리가 문 폭보다 짧으면 부딪힌다
-        const nx = Math.max(p.rect.x, Math.min(hx, p.rect.x + p.rect.w))
-        const ny = Math.max(p.rect.y, Math.min(hy, p.rect.y + p.rect.d))
-        if (Math.hypot(nx - hx, ny - hy) >= item.width - 10) continue
+        // 경첩에서 가구까지의 가장 가까운 거리가 문짝 폭보다 짧으면 부딪힌다
+        const hit = hinges.some((hinge) => {
+          const hx = span.horizontal ? hinge : span.line
+          const hy = span.horizontal ? span.line : hinge
+          const nx = Math.max(p.rect.x, Math.min(hx, p.rect.x + p.rect.w))
+          const ny = Math.max(p.rect.y, Math.min(hy, p.rect.y + p.rect.d))
+          return Math.hypot(nx - hx, ny - hy) < leaf - 10
+        })
+        if (!hit) continue
         issues.push({ id: `door:${item.id}:${p.f.id}`, level: 'error', message: `문이 열릴 때 ${p.item.name}에 부딪혀요`, x: p.f.x, y: p.f.y, target: select(p.f) })
       }
       for (const wire of project.wires) {

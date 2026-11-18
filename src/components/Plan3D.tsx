@@ -257,6 +257,9 @@ function Wall({ piece, height, finish, otherFinish, holes, shadows, cutaway }: W
 
 const FRAME = '#f1f0ec'
 const DOOR = '#c9a37a'
+const STEEL = '#b9bfc6' // 철문 문짝
+const STEEL_PANEL = '#a7aeb6' // 철문 판 무늬
+const STEEL_FRAME = '#7d838b' // 철문 틀
 
 type WallItemMeshProps = {
   attached: Attached
@@ -378,20 +381,51 @@ function WallItemMesh({ attached, selected, interactive, walking, onSelect, onMo
 
       {item.kind === 'door' && (
         <group position={[0, h / 2, 0]}>
-          <mesh position={[0, h / 2 - f / 2, 0]}><boxGeometry args={[w, f, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
-          <mesh position={[-w / 2 + f / 2, 0, 0]}><boxGeometry args={[f, h, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
-          <mesh position={[w / 2 - f / 2, 0, 0]}><boxGeometry args={[f, h, T + 0.02]} /><meshStandardMaterial color={FRAME} /></mesh>
-          {/* 문짝 + 손잡이. 평소엔 닫힌 모습, 걷기 모드에선 경첩을 축으로 90° 열린 모습 */}
-          <group position={[hinge * (w / 2 - f), 0, walking ? swing * (T / 2) : 0]} rotation={[0, walking ? Math.asin(swing * hinge) : 0, 0]}>
-            <mesh castShadow position={[-hinge * (w / 2 - f), -f / 2, 0]}>
-              <boxGeometry args={[w - 2 * f, h - f, 0.04]} />
-              <meshStandardMaterial color={DOOR} roughness={0.7} />
+          {[
+            [0, h / 2 - f / 2, w, f],
+            [-w / 2 + f / 2, 0, f, h],
+            [w / 2 - f / 2, 0, f, h],
+          ].map(([x, y, bw, bh], i) => (
+            <mesh key={i} position={[x, y, 0]}>
+              <boxGeometry args={[bw, bh, T + 0.02]} />
+              <meshStandardMaterial color={item.steel ? STEEL_FRAME : FRAME} metalness={item.steel ? 0.15 : 0} roughness={item.steel ? 0.6 : 1} />
             </mesh>
-            <mesh position={[-hinge * (w - 2 * f - 0.09), -h / 2 + 1.0, 0]}>
-              <boxGeometry args={[0.12, 0.03, 0.12]} />
-              <meshStandardMaterial color="#8f8f94" />
-            </mesh>
-          </group>
+          ))}
+          {/* 문짝 + 손잡이. 평소엔 닫힌 모습, 걷기 모드에선 경첩을 축으로 90° 열린 모습. 양문은 양쪽 경첩에 반 폭짜리 두 짝 */}
+          {(item.double ? [-1, 1] : [hinge]).map((side) => {
+            const lw = item.double ? (w - 2 * f) / 2 : w - 2 * f // 문짝 하나의 폭
+            return (
+              <group
+                key={side}
+                position={[side * (w / 2 - f), 0, walking ? swing * (T / 2) : 0]}
+                rotation={[0, walking ? Math.asin(swing * side) : 0, 0]}
+              >
+                <mesh castShadow position={[-side * (lw / 2), -f / 2, 0]}>
+                  <boxGeometry args={[lw, h - f, item.steel ? 0.05 : 0.04]} />
+                  <meshStandardMaterial
+                    color={item.steel ? STEEL : DOOR}
+                    roughness={item.steel ? 0.5 : 0.7}
+                    metalness={item.steel ? 0.2 : 0}
+                  />
+                </mesh>
+                {/* 철문: 위아래로 눌러 찍은 판 무늬 두 개 (양쪽 면) */}
+                {item.steel &&
+                  [0.22, -0.2].flatMap((fy) =>
+                    [-1, 1].map((face) => (
+                      <mesh key={`${fy}${face}`} position={[-side * (lw / 2), fy * (h - f), face * 0.027]}>
+                        <boxGeometry args={[lw * 0.72, (h - f) * 0.34, 0.004]} />
+                        <meshStandardMaterial color={STEEL_PANEL} roughness={0.55} metalness={0.2} />
+                      </mesh>
+                    )),
+                  )}
+                {/* 손잡이: 철문은 길쭉한 레버, 나무문은 작은 손잡이 */}
+                <mesh position={[-side * (lw - 0.09), -h / 2 + 1.0, 0]}>
+                  <boxGeometry args={item.steel ? [0.16, 0.025, 0.13] : [0.12, 0.03, 0.12]} />
+                  <meshStandardMaterial color={item.steel ? '#2f3237' : '#8f8f94'} metalness={item.steel ? 0.6 : 0} />
+                </mesh>
+              </group>
+            )
+          })}
         </group>
       )}
 

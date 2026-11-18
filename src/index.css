@@ -1820,7 +1820,7 @@ kbd {
   transition: opacity 0.12s;
 }
 
-/* Ctrl+드래그 범위 고르기 사각형 (3D) */
+/* Shift+드래그 범위 고르기 사각형 (3D) */
 .box-select {
   display: none;
   position: absolute;

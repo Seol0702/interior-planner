@@ -353,7 +353,7 @@ export default function App() {
     const same = p.wallItems.filter((i) => i.roomId === room.id && i.side === side).length
     const length = edgeLength(room, side)
     const item = clampWallItem(
-      { id: newId(), kind: preset.kind, roomId: room.id, side, offset: length / 2 + same * (preset.width + 200), width: preset.width, height: Math.min(preset.height, p.wallHeight - preset.sill), sill: preset.sill },
+      { id: newId(), kind: preset.kind, roomId: room.id, side, offset: length / 2 + same * (preset.width + 200), width: preset.width, height: Math.min(preset.height, p.wallHeight - preset.sill), sill: preset.sill, ...(preset.steel && { steel: true }), ...(preset.double && { double: true }) },
       room,
     )
     commit({ ...p, wallItems: [...p.wallItems, item] })

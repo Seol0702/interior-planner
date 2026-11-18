@@ -18,8 +18,16 @@ function Elevation({ preset }: { preset: WallItemPreset }) {
       <path d="M2 29h44" stroke="#c5cad3" strokeWidth="1.2" />
       {preset.kind === 'door' ? (
         <>
-          <rect x={x} y={y} width={w} height={h} rx="0.8" fill="#d9b48c" stroke="#9a7a57" strokeWidth="1" />
-          <circle cx={x + w - 2.2} cy={y + h * 0.55} r="0.9" fill="#6b5640" />
+          <rect x={x} y={y} width={w} height={h} rx="0.8" fill={preset.steel ? '#a7adb5' : '#d9b48c'} stroke={preset.steel ? '#5f656d' : '#9a7a57'} strokeWidth="1" />
+          {preset.double ? (
+            <>
+              <path d={`M${x + w / 2} ${y}v${h}`} stroke={preset.steel ? '#5f656d' : '#9a7a57'} strokeWidth="0.9" />
+              <circle cx={x + w / 2 - 1.6} cy={y + h * 0.55} r="0.8" fill="#3a3d42" />
+              <circle cx={x + w / 2 + 1.6} cy={y + h * 0.55} r="0.8" fill="#3a3d42" />
+            </>
+          ) : (
+            <circle cx={x + w - 2.2} cy={y + h * 0.55} r="0.9" fill={preset.steel ? '#3a3d42' : '#6b5640'} />
+          )}
         </>
       ) : (
         <>

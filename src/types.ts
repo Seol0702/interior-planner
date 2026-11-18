@@ -44,6 +44,8 @@ export type WallItem = {
   sill: number // 바닥에서 아랫부분까지 높이 (문은 0)
   flip?: boolean // 문: 경첩이 반대쪽
   outward?: boolean // 문: 방 바깥쪽으로 열림
+  steel?: boolean // 문: 철문
+  double?: boolean // 문: 양문 (가운데에서 양쪽으로 여는 두 짝)
 }
 
 export type Point = { x: number; y: number }

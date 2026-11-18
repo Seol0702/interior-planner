@@ -26,7 +26,7 @@ type Props = {
   onMeasure: (p: P3) => void // 줄자 도구로 점을 찍었을 때
   multi: string[] // Ctrl로 함께 고른 가구들
   onSelect: (selection: Selection, additive?: boolean) => void // additive: Ctrl+클릭 (더 고르기·빼기)
-  onBoxSelect: (ids: string[]) => void // Ctrl+드래그 범위로 고른 가구들
+  onBoxSelect: (ids: string[]) => void // Shift+드래그 범위로 고른 가구들
   onPlanClick: (x: number, y: number) => void // 도구(전선·메모)를 든 채로 평면을 눌렀을 때
   onFinishWire: () => void
   onMove: (type: DragType, id: string, x: number, y: number) => void
@@ -48,7 +48,7 @@ export default function Plan2D(props: Props) {
   const [cursor, setCursor] = useState<Point | null>(null) // 전선 미리보기용 마우스 위치
   const [aim, setAim] = useState<P3 | null>(null) // 줄자 끝이 지금 붙을 자리
   const [hoverIssue, setHoverIssue] = useState<string | null>(null) // 마우스를 올린 검사 표시
-  // Ctrl+드래그 범위 고르기: 시작점과 그때 이미 골라져 있던 가구들, 지금 그려진 사각형
+  // Shift+드래그 범위 고르기: 시작점과 그때 이미 골라져 있던 가구들, 지금 그려진 사각형
   const boxStart = useRef<{ x: number; y: number; before: string[] } | null>(null)
   const [box, setBox] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const [hoverFurniture, setHoverFurniture] = useState<string | null>(null) // Ctrl을 누르고 올린 가구 (더해질 것 미리 보기)
@@ -70,7 +70,7 @@ export default function Plan2D(props: Props) {
   /** 지금 골라져 있는 가구들 */
   const pickedNow = () => (multi.length ? multi : selection?.type === 'furniture' ? [selection.id] : [])
 
-  /** Ctrl+드래그 범위 고르기 시작 (손을 떼면 사각형에 걸친 가구들을 더한다) */
+  /** Shift+드래그 범위 고르기 시작 (손을 떼면 사각형에 걸친 가구들을 더한다) */
   const beginBox = (e: React.PointerEvent) => {
     const p = toPlan(e)
     boxStart.current = { x: p.x, y: p.y, before: pickedNow() }
@@ -86,11 +86,15 @@ export default function Plan2D(props: Props) {
     // 전선·메모 도구를 들고 있을 때는 물건을 잡지 않고, 평면 클릭으로 넘긴다
     if (!picking) return
     // Ctrl(⌘)+왼쪽 클릭: 가구를 여러 개 고르기에 더하거나 뺀다 (맥은 오른쪽 버튼으로 바뀌어 올 때도 있다)
-    // 누른 채 끌면 범위 고르기가 된다. 방·메모 위에서 시작해도 범위 고르기
     if (isAddClick(e)) {
       e.stopPropagation()
+      if (type === 'furniture') onSelect({ type, id }, true)
+      return
+    }
+    // Shift+드래그: 범위 고르기 (가구·방·메모 위에서 시작해도)
+    if (e.shiftKey && e.button === 0) {
+      e.stopPropagation()
       beginBox(e)
-      if (type === 'furniture') onSelect({ type, id }, true) // 누르는 순간 바로 더하거나 뺀다
       return
     }
     if (e.button !== 0) return
@@ -118,6 +122,7 @@ export default function Plan2D(props: Props) {
     const d = drag.current
     if (d) onMove(d.type, d.id, p.x + d.dx, p.y + d.dy)
     const b = boxStart.current
+    if (b && e.buttons === 0) return end(e) // 버튼을 이미 뗐는데 뗌 신호를 놓쳤으면 여기서 끝낸다
     if (b && (box || Math.hypot(p.x - b.x, p.y - b.y) > fs * 0.4)) setBox({ x0: b.x, y0: b.y, x1: p.x, y1: p.y })
   }
 
@@ -152,7 +157,8 @@ export default function Plan2D(props: Props) {
   }
 
   const background = (e: React.PointerEvent) => {
-    if (picking && isAddClick(e)) return beginBox(e) // 빈 곳에서 Ctrl+드래그: 범위 고르기
+    if (picking && e.shiftKey && e.button === 0) return beginBox(e) // 빈 곳에서 Shift+드래그: 범위 고르기
+    if (picking && isAddClick(e)) return // Ctrl+클릭으로 빈 곳을 눌렀을 때는 고른 것을 그대로 둔다
     if (e.button !== 0) return
     if (picking) onSelect(null)
     else if (tool === 'measure') onMeasure(measurePoint(e))
@@ -409,7 +415,7 @@ export default function Plan2D(props: Props) {
             </g>
           )
         })}
-      {/* Ctrl+드래그 범위 고르기 사각형 */}
+      {/* Shift+드래그 범위 고르기 사각형 */}
       {box && (
         <rect
           x={Math.min(box.x0, box.x1)}
@@ -558,22 +564,32 @@ function WallItemShape({ item, span, pieces, fs, selected, onPointerDown }: Shap
     )
   }
 
-  // 문: 벽을 끊고, 문짝과 열리는 호를 그린다
+  // 문: 벽을 끊고, 문짝과 열리는 호를 그린다 (양문은 양쪽 경첩에서 반 폭짜리 문짝 두 개)
   const dir = item.outward ? normal : -normal // 열리는 쪽
-  const hinge = item.flip ? span.b : span.a
-  const other = item.flip ? span.a : span.b
-  const [hx, hy] = pt(hinge, span.line)
-  const [lx, ly] = pt(hinge, span.line + dir * item.width) // 활짝 열린 문짝의 끝
-  const [ox, oy] = pt(other, span.line)
-  // 문짝 끝 → 반대편 문틀까지 호를 그릴 때 도는 방향
-  const cross = (lx - hx) * (oy - hy) - (ly - hy) * (ox - hx)
+  const mid = (span.a + span.b) / 2
+  const leaves = item.double
+    ? [{ hinge: span.a, other: mid }, { hinge: span.b, other: mid }]
+    : [{ hinge: item.flip ? span.b : span.a, other: item.flip ? span.a : span.b }]
+  const r = item.double ? item.width / 2 : item.width // 문짝 폭 = 호의 반지름
+  const leafColor = item.steel && !selected ? '#52575f' : color // 철문은 회색 문짝
   return (
     <g className="grab" onPointerDown={down}>
-      <rect {...rect(span.a, span.b, lo, hi)} fill="#fafafa" stroke={color} strokeWidth={fs * (selected ? 0.12 : 0.05)} />
-      <path d={`M ${lx} ${ly} A ${item.width} ${item.width} 0 0 ${cross > 0 ? 1 : 0} ${ox} ${oy}`} fill="none" stroke={color} strokeWidth={fs * 0.06} strokeDasharray={`${fs * 0.3} ${fs * 0.2}`} />
-      <line x1={hx} y1={hy} x2={lx} y2={ly} stroke={color} strokeWidth={fs * 0.14} />
+      <rect {...rect(span.a, span.b, lo, hi)} fill={item.steel ? '#e4e6e9' : '#fafafa'} stroke={color} strokeWidth={fs * (selected ? 0.12 : 0.05)} />
+      {leaves.map(({ hinge, other }, i) => {
+        const [hx, hy] = pt(hinge, span.line)
+        const [lx, ly] = pt(hinge, span.line + dir * r) // 활짝 열린 문짝의 끝
+        const [ox, oy] = pt(other, span.line)
+        // 문짝 끝 → 반대편(닫힌 자리)까지 호를 그릴 때 도는 방향
+        const cross = (lx - hx) * (oy - hy) - (ly - hy) * (ox - hx)
+        return (
+          <g key={i}>
+            <path d={`M ${lx} ${ly} A ${r} ${r} 0 0 ${cross > 0 ? 1 : 0} ${ox} ${oy}`} fill="none" stroke={color} strokeWidth={fs * 0.06} strokeDasharray={`${fs * 0.3} ${fs * 0.2}`} />
+            <line x1={hx} y1={hy} x2={lx} y2={ly} stroke={leafColor} strokeWidth={fs * (item.steel ? 0.18 : 0.14)} />
+          </g>
+        )
+      })}
       {/* 누를 자리를 넓히는 투명 부채꼴 영역 */}
-      <rect {...rect(span.a, span.b, span.line, span.line + dir * item.width)} fill="transparent" />
+      <rect {...rect(span.a, span.b, span.line, span.line + dir * r)} fill="transparent" />
     </g>
   )
 }

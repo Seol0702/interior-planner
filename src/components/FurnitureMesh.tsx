@@ -58,10 +58,16 @@ export default function FurnitureMesh({ instance, item, selected, multi = false,
   }
 
   const handleDown = (e: ThreeEvent<PointerEvent>) => {
-    // Ctrl(⌘)+왼쪽 클릭: 누르는 순간 바로 여러 개 고르기에 더하거나 뺀다 (잡아서 끌지는 않는다)
+    // Ctrl(⌘)+왼쪽 클릭: 짧게 눌렀다 떼면 여러 개 고르기에 더하거나 뺀다.
+    // 누른 채 끌면 시점 회전이라 고르지 않는다. 뗌 신호는 창 전체에서 받는다 (가구 밖에서 떼도 알 수 있게)
     if (interactive && isAddClick(e)) {
       e.stopPropagation()
-      onSelect(true)
+      const [sx, sy] = [e.clientX, e.clientY]
+      const up = (ev: PointerEvent) => {
+        window.removeEventListener('pointerup', up, true)
+        if (Math.hypot(ev.clientX - sx, ev.clientY - sy) <= 5) onSelect(true)
+      }
+      window.addEventListener('pointerup', up, true)
       return
     }
     // 왼쪽 버튼만 가구를 잡는다. (오른쪽 버튼·Shift+드래그는 화면 회전용)

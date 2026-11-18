@@ -125,6 +125,8 @@ export function parseProject(text: string): Project {
     }
     if (w.flip === true) item.flip = true
     if (w.outward === true) item.outward = true
+    if (w.steel === true) item.steel = true
+    if (w.double === true) item.double = true
     wallItems.push(item)
   }
 

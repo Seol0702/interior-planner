@@ -1,7 +1,6 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { isAddClick } from '../keys'
 
 /** 범위 고르기 후보: 가구 하나의 가운데 (3D 좌표, m) */
 export type BoxCandidate = { id: string; center: [number, number, number] }
@@ -16,8 +15,9 @@ type Props = {
 const SLOP = 5 // 이만큼(px) 넘게 끌어야 범위 고르기로 본다
 
 /**
- * 3D 화면에서 Ctrl(⌘)+드래그: 사각형을 그려 그 안에 가운데가 들어온 가구를 모두 더한다.
- * Ctrl을 누르고 누르는 순간 시점 회전을 잠시 꺼서, 끄는 동안 화면이 돌지 않게 한다.
+ * 3D 화면에서 Shift+드래그: 사각형을 그려 그 안에 가운데가 들어온 가구를 모두 더한다.
+ * Shift를 누르고 누르는 순간 시점 회전을 잠시 꺼서, 끄는 동안 화면이 돌지 않게 한다.
+ * (Ctrl+드래그는 시점 회전, Ctrl+클릭은 하나씩 더하기)
  */
 export default function BoxSelect3D({ candidates, picked, rectRef, onBoxSelect }: Props) {
   const { gl, camera, controls } = useThree()
@@ -49,16 +49,18 @@ export default function BoxSelect3D({ candidates, picked, rectRef, onBoxSelect }
 
     // 캔버스보다 먼저 받아서(capture) 시점 회전 조작기가 이 누름을 무시하게 한다
     const onDown = (e: PointerEvent) => {
-      if (!isAddClick(e)) return
+      if (!e.shiftKey || e.ctrlKey || e.metaKey || e.button !== 0) return
       if (orbit) orbit.enabled = false
       const p = local(e)
       start = { x: p.x, y: p.y, before: latest.current.picked }
       dragging = false
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
+      window.addEventListener('pointercancel', onUp)
     }
     const onMove = (e: PointerEvent) => {
       if (!start) return
+      if (e.buttons === 0) return onUp(e) // 버튼을 이미 뗐는데 뗌 신호를 놓쳤으면 여기서 끝낸다
       const p = local(e)
       if (!dragging && Math.hypot(p.x - start.x, p.y - start.y) < SLOP) return
       dragging = true
@@ -67,6 +69,7 @@ export default function BoxSelect3D({ candidates, picked, rectRef, onBoxSelect }
     const onUp = (e: PointerEvent) => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
       if (orbit) orbit.enabled = true
       const s = start
       start = null
@@ -94,6 +97,7 @@ export default function BoxSelect3D({ candidates, picked, rectRef, onBoxSelect }
       el.removeEventListener('pointerdown', onDown, true)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
       if (orbit) orbit.enabled = true
       hide()
     }

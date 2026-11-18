@@ -63,10 +63,29 @@ export function WallItemCard({ item, room, onChange, onDelete, onClose }: WallIt
         끌어서 옮기거나 방향키로 1cm씩 조절해요. ←→ 벽을 따라{item.kind !== 'door' && ', ↑↓ 높이'} (Shift: 10cm)
       </p>
       {item.kind === 'door' && (
+        <label className="field">
+          문 종류
+          <select
+            value={`${item.steel ? 'steel' : 'wood'}-${item.double ? 'double' : 'single'}`}
+            onChange={(e) => {
+              const [material, leaves] = e.target.value.split('-')
+              onChange({ steel: material === 'steel' || undefined, double: leaves === 'double' || undefined })
+            }}
+          >
+            <option value="wood-single">나무문</option>
+            <option value="wood-double">양문형 나무문</option>
+            <option value="steel-single">철문</option>
+            <option value="steel-double">양문형 철문</option>
+          </select>
+        </label>
+      )}
+      {item.kind === 'door' && (
         <div className="inline-actions">
-          <button className="btn sm" onClick={() => onChange({ flip: !item.flip })}>
-            경첩 반대로
-          </button>
+          {!item.double && (
+            <button className="btn sm" onClick={() => onChange({ flip: !item.flip })}>
+              경첩 반대로
+            </button>
+          )}
           <button className="btn sm" onClick={() => onChange({ outward: !item.outward })}>
             열리는 쪽 반대로
           </button>

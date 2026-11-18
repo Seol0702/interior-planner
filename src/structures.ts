@@ -8,11 +8,15 @@ export type WallItemPreset = {
   width: number
   height: number
   sill: number // 바닥에서 아랫부분까지 높이
+  steel?: boolean // 철문
+  double?: boolean // 양문
 }
 
 export const WALL_ITEM_PRESETS: WallItemPreset[] = [
   { id: 'door', name: '방문', kind: 'door', width: 900, height: 2100, sill: 0 },
   { id: 'door-wide', name: '현관문', kind: 'door', width: 1000, height: 2100, sill: 0 },
+  { id: 'door-steel', name: '철문', kind: 'door', width: 900, height: 2100, sill: 0, steel: true },
+  { id: 'door-steel-double', name: '양문형 철문', kind: 'door', width: 1800, height: 2100, sill: 0, steel: true, double: true },
   { id: 'window', name: '창문', kind: 'window', width: 1500, height: 1200, sill: 900 },
   { id: 'window-small', name: '작은 창', kind: 'window', width: 800, height: 800, sill: 1200 },
   { id: 'window-large', name: '거실 통창', kind: 'window', width: 2400, height: 2000, sill: 150 },
