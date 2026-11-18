@@ -502,6 +502,20 @@ const builders: Record<ShapeId, Builder> = {
     ]
   },
 
+  // 벽걸이 칠판·화이트보드: 틀(본체 색) + 판(포인트 색) + 아래 받침 + 분필·지우개 (뒤쪽을 벽에 붙여 쓴다)
+  wallBoard: (W, D, H) => {
+    const back = -D / 2 // 벽에 닿는 면
+    const tray = Math.min(60, D * 0.6) // 받침이 튀어나온 길이
+    return [
+      box('main', 0, H / 2, back + 15, W, H, 30), // 틀
+      box('accent', 0, H / 2, back + 32, W - 60, H - 60, 4), // 판
+      box('main', 0, 20, back + 30 + tray / 2, W * 0.8, 14, tray), // 받침
+      box('white', W * 0.15, 33, back + 30 + tray / 2, 70, 12, 12), // 분필·마커
+      box('book1', W * 0.2, 33, back + 30 + tray / 2, 70, 12, 12),
+      box('dark', -W * 0.22, 42, back + 30 + tray / 2, 130, 30, 45), // 지우개
+    ]
+  },
+
   // 소형 2도어 냉장고: 위 냉동실(작은 문) + 아래 냉장실(큰 문). 문 사이 틈과 손잡이
   fridgeTopFreezer: (W, D, H) => {
     const foot = 30 // 바닥과 띄운 높이
