@@ -100,7 +100,7 @@ export function runChecks(project: Project, pieces: WallPiece[]): Issue[] {
   }
 
   // 2) 좁은 틈: 덩치 큰 가구 사이가 어중간하게 떨어져 통로로 쓰기 좁은 경우
-  const small = ['chair', 'officeChair', 'stool', 'lamp', 'plant', 'beanbag', 'fan', 'tower', 'mirror', 'coatStand', 'toilet']
+  const small = ['chair', 'officeChair', 'gamingChair', 'stool', 'lamp', 'plant', 'beanbag', 'fan', 'tower', 'mirror', 'coatStand', 'toilet']
   const bulky = solid.filter((p) => !small.includes(p.item.shape))
   for (let i = 0; i < bulky.length; i++) {
     for (let j = i + 1; j < bulky.length; j++) {

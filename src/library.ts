@@ -49,7 +49,7 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('desk', '책상', '서재', 'desk', 1200, 600, 740, '#b08e68', '#d3bfa3'),
   item('motion-desk', '모션데스크', '서재', 'standingDesk', 1400, 700, 740, '#e9e4dc', '#e9e4dc'),
   item('office-chair', '사무용 의자', '서재', 'officeChair', 600, 600, 950, '#3f3f46', '#52525b'),
-  item('gaming-chair', '게이밍 의자', '서재', 'officeChair', 700, 700, 1300, '#27272a', '#b91c1c'),
+  item('gaming-chair', '게이밍 의자', '서재', 'gamingChair', 700, 700, 1300, '#17171a', '#2f2f34'),
   item('bookshelf', '책장', '서재', 'bookshelf', 800, 300, 1800, '#b89a78', '#b89a78'),
   item('cube-shelf-4x2', '큐브 선반 4×2 (칼락스형)', '서재', 'cubeShelf', 1470, 390, 770, '#f4f4f2', '#c9b79f'),
   item('cube-shelf-2x2', '큐브 선반 2×2', '서재', 'cubeShelf', 770, 390, 770, '#f4f4f2', '#9fb3c8'),

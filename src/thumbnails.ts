@@ -50,8 +50,9 @@ export function furnitureThumbnails(items: FurnitureLibraryItem[], size = 192): 
       })
       const mesh = new THREE.Mesh(geometry, material)
       mesh.position.set(p.x / 1000, p.y / 1000, p.z / 1000)
-      if (p.axis === 'z') mesh.rotation.x = Math.PI / 2
-      if (p.axis === 'x') mesh.rotation.z = Math.PI / 2
+      if (p.rot) mesh.rotation.set(...p.rot) // 비스듬히 돌린 부품
+      else if (p.axis === 'z') mesh.rotation.x = Math.PI / 2
+      else if (p.axis === 'x') mesh.rotation.z = Math.PI / 2
       if (p.kind === 'ball') mesh.scale.set(p.w / 1000, p.h / 1000, p.d / 1000)
       group.add(mesh)
       disposables.push(geometry, material)

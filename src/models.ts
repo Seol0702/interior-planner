@@ -32,6 +32,7 @@ export type Part = {
   h: number
   d: number
   axis?: 'x' | 'y' | 'z' // 원기둥이 놓인 방향 (y = 세워짐)
+  rot?: [number, number, number] // 비스듬히 돌린 부품 (x·y·z축 회전, 라디안). 있으면 axis 대신 쓴다
 }
 
 const box = (tone: Tone, x: number, y: number, z: number, w: number, h: number, d: number): Part =>
@@ -43,6 +44,24 @@ const ball = (tone: Tone, x: number, y: number, z: number, dia: number): Part =>
 /** 찌그러진 공 (빈백 등) */
 const blob = (tone: Tone, x: number, y: number, z: number, w: number, h: number, d: number): Part =>
   ({ kind: 'ball', tone, x, y, z, w, h, d })
+
+/** 부품을 비스듬히 돌린다 (의자 다리 갈래, 뒤로 누운 등받이 등) */
+const turned = (p: Part, rot: [number, number, number]): Part => ({ ...p, rot })
+
+/**
+ * 바퀴 달린 의자 다리: 가운데에서 n갈래로 뻗은 다리 + 끝마다 바퀴.
+ * reach: 가운데에서 바퀴까지 거리, start: 첫 갈래의 각도
+ */
+const starBase = (n: number, reach: number, start: number): Part[] =>
+  Array.from({ length: n }, (_, i) => {
+    const a = start + (i / n) * Math.PI * 2
+    const [cx, cz] = [Math.cos(a), Math.sin(a)]
+    return [
+      turned(box('dark', (cx * reach) / 2, 75, (cz * reach) / 2, reach, 35, 45), [0, -a, 0]), // 다리 갈래
+      box('dark', cx * reach, 52, cz * reach, 22, 30, 22), // 바퀴 축
+      turned(cyl('dark', cx * reach, 28, cz * reach, 55, 32, 'y'), [Math.PI / 2, -a, 0]), // 바퀴
+    ]
+  }).flat()
 
 /** 네 귀퉁이 다리 */
 const legs = (tone: Tone, lx: number, lz: number, h: number, t: number): Part[] =>
@@ -69,15 +88,50 @@ const builders: Record<ShapeId, Builder> = {
     ]
   },
 
+  // 사무용·메쉬 의자: 바퀴 달린 4갈래 다리 + 기둥 + 좌판 + 등받이 + 팔걸이
   officeChair: (W, D, H) => {
     const sh = Math.min(480, H * 0.5)
     return [
-      cyl('dark', 0, 25, 0, W * 0.9, 50), // 바퀴 받침
-      cyl('metal', 0, 50 + (sh - 130) / 2, 0, 60, sh - 130), // 기둥
+      ...starBase(4, Math.min(W, D) * 0.46, Math.PI / 4), // 4갈래 다리 (대각선 방향)
+      cyl('dark', 0, 95, 0, 80, 50), // 다리 가운데
+      cyl('metal', 0, 100 + (sh - 180) / 2, 0, 50, sh - 180), // 기둥
       box('accent', 0, sh - 40, 0, W * 0.85, 80, D * 0.8), // 좌판
       box('accent', 0, sh + 60 + (H - sh - 60) / 2, -D * 0.36, W * 0.75, H - sh - 60, 60), // 등받이
-      box('dark', -W * 0.42, sh + 120, 0, 40, 30, D * 0.5), // 팔걸이
-      box('dark', W * 0.42, sh + 120, 0, 40, 30, D * 0.5),
+      ...[-1, 1].flatMap((s) => [
+        box('dark', s * W * 0.42, sh + 120, 0, 40, 30, D * 0.5), // 팔걸이
+        box('dark', s * W * 0.42, sh + 40, -D * 0.05, 30, 150, 30), // 팔걸이 기둥
+      ]),
+    ]
+  },
+
+  // 게이밍 의자: 바퀴 달린 5갈래 다리 + 가스 기둥 + 볼록한 버킷 좌석 + 뒤로 살짝 누운 높은 등받이(양옆 날개·머리받침) + 기둥형 팔걸이
+  gamingChair: (W, D, H) => {
+    const sh = Math.min(520, H * 0.4) // 앉는 높이
+    const tilt = 0.16 // 등받이가 뒤로 누운 각도 (라디안, 약 9°)
+    const back = (H - sh) / Math.cos(tilt) // 등받이 길이
+    const pivot = { y: sh - 20, z: -D * 0.3 } // 등받이가 꺾이는 곳
+    // 등받이 부품 놓기: u = 등받이를 따라 위로, v = 등받이 앞쪽으로
+    const onBack = (tone: Tone, x: number, u: number, v: number, w: number, h: number, d: number) =>
+      turned(box(tone, x, pivot.y + u * Math.cos(tilt) + v * Math.sin(tilt), pivot.z - u * Math.sin(tilt) + v * Math.cos(tilt), w, h, d), [-tilt, 0, 0])
+    return [
+      ...starBase(5, Math.min(W, D) * 0.47, Math.PI / 2), // 5갈래 다리
+      cyl('dark', 0, 100, 0, 90, 60), // 다리 가운데
+      cyl('dark', 0, 130 + (sh - 280) / 2, 0, 70, sh - 280), // 가스 기둥 덮개
+      cyl('metal', 0, sh - 150 + 30, 0, 45, 60), // 기둥 윗부분
+      box('dark', 0, sh - 110, 10, 240, 40, 260), // 좌석 밑 틀
+      box('dark', W * 0.2, sh - 115, D * 0.22, 160, 14, 30), // 높이 조절 손잡이
+      box('accent', 0, sh - 45, D * 0.05, W * 0.52, 90, D * 0.74), // 좌석 가운데
+      ...[-1, 1].map((s) => box('main', s * W * 0.31, sh - 35, D * 0.05, W * 0.1, 110, D * 0.74)), // 좌석 양옆 (살짝 볼록)
+      onBack('accent', 0, back * 0.46, 45, W * 0.44, back * 0.92, 80), // 등받이 가운데 (머리까지)
+      ...[-1, 1].map((s) => onBack('main', s * W * 0.29, back * 0.38, 30, W * 0.15, back * 0.7, 120)), // 등받이 양옆 날개 (허리~가슴)
+      ...[-1, 1].map((s) => onBack('main', s * W * 0.25, back * 0.79, 30, W * 0.08, back * 0.16, 110)), // 어깨 (위로 갈수록 좁아짐)
+      onBack('main', 0, back * 0.95, 30, W * 0.46, back * 0.1, 105), // 머리받침 윗부분
+      onBack('dark', 0, back * 0.47, -35, W * 0.66, back * 0.92, 30), // 등받이 뒷판
+      ...[-1, 1].flatMap((s) => [
+        box('dark', s * W * 0.4, sh + 40, 0, 50, 200, 60), // 팔걸이 기둥
+        box('dark', s * W * 0.4, sh + 150, D * 0.04, 90, 30, D * 0.36), // 팔걸이 패드
+        box('dark', s * W * 0.37, sh - 60, -10, 40, 50, 160), // 팔걸이 받침
+      ]),
     ]
   },
 

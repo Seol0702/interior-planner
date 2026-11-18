@@ -61,6 +61,7 @@ export type ShapeId =
   | 'box'
   | 'chair'
   | 'officeChair'
+  | 'gamingChair'
   | 'stool'
   | 'sofa'
   | 'bed'

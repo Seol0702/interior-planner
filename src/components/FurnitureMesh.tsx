@@ -130,7 +130,7 @@ export default function FurnitureMesh({ instance, item, selected, multi = false,
           castShadow={item.mount !== 'ceiling' && p.tone !== 'glass'}
           receiveShadow
           position={[mm(p.x), mm(p.y), mm(p.z)]}
-          rotation={p.axis === 'z' ? [Math.PI / 2, 0, 0] : p.axis === 'x' ? [0, 0, Math.PI / 2] : [0, 0, 0]}
+          rotation={p.rot ?? (p.axis === 'z' ? [Math.PI / 2, 0, 0] : p.axis === 'x' ? [0, 0, Math.PI / 2] : [0, 0, 0])}
           scale={p.kind === 'ball' ? [mm(p.w), mm(p.h), mm(p.d)] : [1, 1, 1]}
         >
           {p.kind === 'box' && <boxGeometry args={[mm(p.w), mm(p.h), mm(p.d)]} />}
