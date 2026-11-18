@@ -4,6 +4,7 @@ import { findLibraryItem } from './library'
 import { ALL_PATTERNS, DEFAULT_FLOOR, DEFAULT_WALL } from './finishes'
 import { isHex } from './colors'
 import { newId } from './plan'
+import type { Measurement } from './measure'
 
 export const DEFAULT_PROJECT: Project = {
   version: 3,
@@ -151,7 +152,22 @@ export function parseProject(text: string): Project {
     wires,
     notes,
     ...parseSite(data.site),
+    ...parseMeasures(data.measures),
   }
+}
+
+/** 줄자로 잰 것들 (이상한 것은 빼고) */
+function parseMeasures(v: unknown): { measures?: Measurement[] } {
+  if (!Array.isArray(v)) return {}
+  const point = (p: unknown) => (isObject(p) && isNum(p.x) && isNum(p.y) && isNum(p.z) ? { x: p.x, y: p.y, z: p.z } : null)
+  const measures: Measurement[] = []
+  for (const m of v.slice(0, 200)) {
+    if (!isObject(m)) continue
+    const a = point(m.a)
+    const b = point(m.b)
+    if (a && b) measures.push({ id: typeof m.id === 'string' ? m.id : newId(), a, b })
+  }
+  return measures.length ? { measures } : {}
 }
 
 /** 집 위치 (없거나 이상하면 빼고 연다) */

@@ -20,7 +20,7 @@ import WalkBar from './components/WalkBar'
 import SitePanel from './components/SitePanel'
 import { useSurroundings } from './useSurroundings'
 import { DEFAULT_BODY_HEIGHT, bodySize } from './walk'
-import { EMPTY_MEASURE, distance, type MeasureState, type P3 } from './measure'
+import { distance, type MeasureState, type P3 } from './measure'
 import Plan2D from './components/Plan2D'
 import Header from './components/Header'
 import Rail, { type Section } from './components/Rail'
@@ -98,7 +98,7 @@ export default function App() {
   const [layer, setLayer] = useState<LayerView>('all')
   const [tool, setTool] = useState<Tool>('select')
   const [draft, setDraft] = useState<Point[] | null>(null) // 그리고 있는 전선의 점들
-  const [measure, setMeasure] = useState<MeasureState>(EMPTY_MEASURE) // 줄자로 잰 것들
+  const [measureStart, setMeasureStart] = useState<P3 | null>(null) // 줄자: 찍어 둔 시작점 (끝점을 기다리는 중)
   const [notesVisible, setNotesVisible] = useState(true)
   const [notesExpanded, setNotesExpanded] = useState(false)
   const [lighting, setLighting] = useState<Lighting>({ enabled: false, time: 14, season: 'equinox', night: false, lamps: false })
@@ -110,9 +110,54 @@ export default function App() {
   // 마우스를 빠르게 움직이면 화면이 다시 그려지기 전에 다음 이벤트가 올 수 있다.
   // 그래서 "가장 최신 프로젝트"를 ref에도 따로 들고 있는다.
   const latest = useRef(project)
+
+  // ───────── 되돌리기 (Ctrl+Z) ─────────
+  // 바뀌기 전 프로젝트를 쌓아 둔다. 마우스를 한 번 누르고 떼는 동안(끌기)의 변화는 한 번으로 친다
+  const past = useRef<Project[]>([])
+  const future = useRef<Project[]>([])
+  const newStep = useRef(true) // 다음 변경은 새 되돌리기 단계인가
+  const [history, setHistory] = useState({ undo: 0, redo: 0 }) // 단추를 켜고 끄려고 개수만 화면에 알린다
+  const syncHistory = () => setHistory({ undo: past.current.length, redo: future.current.length })
+  useEffect(() => {
+    // 마우스를 누르거나 키를 누를 때마다 "여기서부터 새 단계"
+    const mark = (e: Event) => {
+      if (!(e instanceof KeyboardEvent && e.repeat)) newStep.current = true
+    }
+    window.addEventListener('pointerdown', mark, true)
+    window.addEventListener('keydown', mark, true)
+    return () => {
+      window.removeEventListener('pointerdown', mark, true)
+      window.removeEventListener('keydown', mark, true)
+    }
+  }, [])
+
   const commit = (next: Project) => {
+    if (next === latest.current) return
+    if (newStep.current) {
+      past.current.push(latest.current)
+      if (past.current.length > 100) past.current.shift() // 너무 많이 쌓이지 않게 최근 100번까지만
+      newStep.current = false
+    }
+    future.current = []
     latest.current = next
     setProject(next)
+    syncHistory()
+  }
+
+  /** 되돌리기(back = true) / 다시 하기 */
+  const travel = (back: boolean) => {
+    const from = back ? past.current : future.current
+    const to = back ? future.current : past.current
+    const target = from.pop()
+    if (!target) return
+    to.push(latest.current)
+    latest.current = target
+    setProject(target)
+    newStep.current = true
+    setGuides([])
+    setDraft(null)
+    setMeasureStart(null)
+    syncHistory()
   }
 
   /** 하나만 고르기 (함께 고른 무리는 풀린다) */
@@ -153,6 +198,7 @@ export default function App() {
   // 지금 고른 가구들 (Ctrl로 여러 개 골랐으면 전부, 아니면 하나)
   const groupIds = multi.length >= 2 ? multi.filter((id) => furniture.some((f) => f.id === id)) : selectedFurniture ? [selectedFurniture.id] : []
   const multiSelected = groupIds.length >= 2
+  const measure: MeasureState = { list: project.measures ?? [], start: measureStart }
 
   // useMemo: 계산이 무거운 값은 재료(rooms 등)가 바뀔 때만 다시 계산
   const pieces = useMemo(() => wallPieces(rooms), [rooms])
@@ -601,20 +647,31 @@ export default function App() {
   }
 
   /** 줄자: 첫 번째 누름은 시작점, 두 번째 누름은 끝점 (다 재면 다음 줄자를 또 잴 수 있다) */
-  const addMeasurePoint = (p: P3) =>
-    setMeasure(({ list, start }) => {
-      if (!start) return { list, start: p }
-      if (distance(start, p) < 1) return { list, start } // 같은 자리를 두 번 누른 경우
-      return { list: [...list, { id: Date.now(), a: start, b: p }], start: null }
-    })
+  const addMeasurePoint = (p: P3) => {
+    if (!measureStart) return setMeasureStart(p)
+    if (distance(measureStart, p) < 1) return // 같은 자리를 두 번 누른 경우
+    const now = latest.current
+    commit({ ...now, measures: [...(now.measures ?? []), { id: newId(), a: measureStart, b: p }] })
+    setMeasureStart(null)
+  }
+
+  /** 잰 줄자 지우기: keep개만 남긴다 (0 = 모두 지우기) */
+  const trimMeasures = (keep: number) => {
+    const { measures: list = [], ...rest } = latest.current
+    if (list.length === 0) return
+    commit(keep > 0 ? { ...rest, measures: list.slice(0, keep) } : rest)
+  }
 
   /** 줄자: 찍다 만 시작점 → 마지막으로 잰 것 순서로 지운다 */
-  const undoMeasure = () => setMeasure(({ list, start }) => (start ? { list, start: null } : { list: list.slice(0, -1), start: null }))
+  const undoMeasure = () => {
+    if (measureStart) setMeasureStart(null)
+    else trimMeasures((latest.current.measures?.length ?? 1) - 1)
+  }
 
   const changeTool = (next: Tool) => {
     setTool(next)
     setDraft(null)
-    setMeasure(EMPTY_MEASURE)
+    setMeasureStart(null)
     if (next !== 'select') {
       setSelection(null)
       setLayer('all') // 전선·메모가 보이는 상태에서 그리게
@@ -705,9 +762,15 @@ export default function App() {
       const el = e.target as HTMLElement
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName)) return
       // Ctrl(맥은 ⌘) + C·V·A: 가구 복사·붙여넣기·모두 고르기
+      // 자판 위치(code)로 보고, 없으면 글자로 (한글 모드면 ㅋ·ㅛ·ㅊ·ㅍ·ㅁ)
+      const is = (code: string, ...keys: string[]) => e.code === code || keys.includes(e.key.toLowerCase())
+      // Ctrl(맥은 ⌘) + Z: 되돌리기, Ctrl + Shift + Z 또는 Ctrl + Y: 다시 하기
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !walkView && (is('KeyZ', 'z', 'ㅋ') || is('KeyY', 'y', 'ㅛ'))) {
+        e.preventDefault()
+        travel(is('KeyZ', 'z', 'ㅋ') && !e.shiftKey)
+        return
+      }
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !walkView && tool === 'select') {
-        // 자판 위치(code)로 보고, 없으면 글자로 (한글 모드면 ㅊ·ㅍ·ㅁ)
-        const is = (code: string, ...keys: string[]) => e.code === code || keys.includes(e.key.toLowerCase())
         if (is('KeyC', 'c', 'ㅊ') && groupIds.length > 0 && !window.getSelection()?.toString()) {
           e.preventDefault()
           copySelected()
@@ -745,7 +808,7 @@ export default function App() {
           break
         case 'Enter': if (tool === 'wire') finishWire(); break
         case 'Escape':
-          if (tool === 'measure' && measure.start) undoMeasure() // 찍다 만 시작점만 취소
+          if (tool === 'measure' && measureStart) undoMeasure() // 찍다 만 시작점만 취소
           else if (tool !== 'select') changeTool('select')
           else setSelection(null)
           break
@@ -773,7 +836,8 @@ export default function App() {
       <Header mode={mode} project={project} onMode={(m) => {
           if (m === '2d' && walkView) setWalkView(null) // 평면도만 보면 걷기를 끝낸다
           setMode(m)
-        }} onLoad={replaceProject} onReset={() => replaceProject(DEFAULT_PROJECT)} onToast={showToast} />
+        }} onLoad={replaceProject} onReset={() => replaceProject(DEFAULT_PROJECT)} onToast={showToast}
+        canUndo={history.undo > 0} canRedo={history.redo > 0} onUndo={() => travel(true)} onRedo={() => travel(false)} />
 
       <div className="body">
         <Rail section={section} badges={{ check: errorCount, notes: notes.length }} onSection={setSection} />
@@ -929,10 +993,10 @@ export default function App() {
               {tool === 'wire'
                 ? `전선 그리기 · 바닥을 차례로 눌러 주세요${draft ? ` (${draft.length}개)` : ''} · Enter로 끝, Esc로 취소`
                 : tool === 'measure'
-                  ? `줄자 · ${measure.start ? '끝점을 눌러 주세요' : '시작점을 눌러 주세요'} · Shift 똑바로 · Esc로 끝`
+                  ? `줄자 · ${measureStart ? '끝점을 눌러 주세요' : '시작점을 눌러 주세요'} · 수평·수직 근처는 자동 맞춤 · Esc로 끝`
                   : '메모 찍기 · 메모할 자리를 눌러 주세요 · Esc로 취소'}
               {tool === 'measure' && measure.list.length > 0 && (
-                <button className="btn sm" onClick={() => setMeasure(EMPTY_MEASURE)}>
+                <button className="btn sm" onClick={() => trimMeasures(0)}>
                   모두 지우기
                 </button>
               )}
@@ -958,6 +1022,8 @@ export default function App() {
               mode={mode}
               layer={layer}
               measuring={tool === 'measure'}
+              measureCount={measure.list.length}
+              onClearMeasures={() => trimMeasures(0)}
               onView={(view: ViewName) => setViewRequest({ view, nonce: Date.now() })}
               onLayer={setLayer}
               onMeasure={() => changeTool(tool === 'measure' ? 'select' : 'measure')}

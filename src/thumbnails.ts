@@ -40,7 +40,14 @@ export function furnitureThumbnails(items: FurnitureLibraryItem[], size = 192): 
           : p.kind === 'cyl'
             ? new THREE.CylinderGeometry(p.w / 2000, p.w / 2000, p.h / 1000, 28)
             : new THREE.SphereGeometry(0.5, 24, 16)
-      const material = new THREE.MeshStandardMaterial({ color: toneColor(p.tone, item.color, item.accent), roughness: 0.75 })
+      const glass = p.tone === 'glass' // 색유리는 반투명하게
+      const material = new THREE.MeshStandardMaterial({
+        color: toneColor(p.tone, item.color, item.accent),
+        roughness: glass ? 0.1 : 0.75,
+        transparent: glass,
+        opacity: glass ? 0.6 : 1,
+        depthWrite: !glass,
+      })
       const mesh = new THREE.Mesh(geometry, material)
       mesh.position.set(p.x / 1000, p.y / 1000, p.z / 1000)
       if (p.axis === 'z') mesh.rotation.x = Math.PI / 2

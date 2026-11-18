@@ -142,6 +142,8 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('desk-wide', '와이드 책상', '서재', 'desk', 1600, 700, 740, '#7a5c40', '#a58a6d'),
   item('desk-computer', '컴퓨터 책상', '서재', 'standingDesk', 1200, 600, 740, '#3f3f46', '#3f3f46'),
   item('desk-study', '학생 책상', '서재', 'desk', 1200, 600, 740, '#e9e4dc', '#9fb3c8'),
+  item('desk-glass-panel', '판다리 유리 책상', '서재', 'panelDesk', 1400, 700, 740, '#e4e1da', '#3f9f6c'),
+  item('table-glass-panel', '판다리 유리 회의 테이블', '서재', 'panelDesk', 2400, 1200, 750, '#e4e1da', '#3f9f6c'),
   item('chair-mesh', '메쉬 의자', '서재', 'officeChair', 620, 620, 1050, '#52525b', '#71717a'),
   item('chair-study', '원목 공부 의자', '서재', 'chair', 450, 500, 820, '#b08e68', '#b08e68'),
   item('bookshelf-wide', '와이드 책장', '서재', 'bookshelf', 1200, 300, 1800, '#f1efe9', '#f1efe9'),

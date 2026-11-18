@@ -7,12 +7,10 @@ import { fmtCm, snap } from './units'
 export type P3 = { x: number; y: number; z: number }
 
 /** 다 잰 줄자 하나: 시작점 a → 끝점 b */
-export type Measurement = { id: number; a: P3; b: P3 }
+export type Measurement = { id: string; a: P3; b: P3 }
 
-/** 줄자 도구의 상태: 다 잰 것들 + 찍어 둔 시작점(끝점을 기다리는 중) */
+/** 화면에 그릴 줄자: 다 잰 것들(지우기 전까지 남는다) + 찍어 둔 시작점(끝점을 기다리는 중) */
 export type MeasureState = { list: Measurement[]; start: P3 | null }
-
-export const EMPTY_MEASURE: MeasureState = { list: [], start: null }
 
 /** 세로선(x = at, y가 from~to) 또는 가로선(y = at, x가 from~to) */
 type Line = { at: number; from: number; to: number }
@@ -89,6 +87,26 @@ export function lockAxis(start: P3, p: P3): P3 {
   if (dx >= dy && dx >= dz) return { ...start, x: p.x }
   if (dy >= dz) return { ...start, y: p.y }
   return { ...start, z: p.z }
+}
+
+/**
+ * 파워포인트처럼: 시작점과 거의 수평·수직(0°·90°)이면 똑바로 맞춘다.
+ * tol: 이 거리(mm)만큼 비뚤어진 것까지 맞춘다 (단, 10°를 넘게 비뚤면 그대로)
+ */
+export function alignAngle(start: P3, p: P3, tol: number): P3 {
+  const MAX = Math.tan((10 * Math.PI) / 180)
+  const near = (off: number, along: number) => off !== 0 && Math.abs(off) <= tol && Math.abs(off) <= Math.abs(along) * MAX
+  let { x, y, z } = p
+  const dx = x - start.x
+  const dy = y - start.y
+  const dz = z - start.z
+  const flat = Math.hypot(dx, dy)
+  // 거의 똑바로 위아래(높이 재기)면 평면 위치를 시작점에 맞춘다
+  if (near(flat, dz)) return { x: start.x, y: start.y, z }
+  if (near(dz, flat)) z = start.z // 거의 수평이면 높이를 맞춘다
+  if (near(dy, dx)) y = start.y // 평면에서 거의 가로
+  else if (near(dx, dy)) x = start.x // 평면에서 거의 세로
+  return { x, y, z }
 }
 
 export const distance = (a: P3, b: P3) => Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z)

@@ -10,6 +10,10 @@ type Props = {
   onLoad: (project: Project) => void
   onReset: () => void
   onToast: (text: string, error?: boolean) => void
+  canUndo: boolean
+  canRedo: boolean
+  onUndo: () => void
+  onRedo: () => void
 }
 
 const MODES: { id: ViewMode; name: string }[] = [
@@ -24,6 +28,7 @@ const SHORTCUTS: [string, string][] = [
   ['창문·콘센트 + 방향키', '←→ 벽을 따라, ↑↓ 높이'],
   ['R', '가구 회전'],
   ['Delete', '선택한 것 삭제'],
+  ['Ctrl + Z', '되돌리기 (Ctrl + Shift + Z · Ctrl + Y: 다시 하기)'],
   ['V', '보기 전환 (전체·가구·전기·구조)'],
   ['Esc', '선택·도구 취소'],
   ['빈 곳 왼쪽 드래그', '시점 이동'],
@@ -34,14 +39,14 @@ const SHORTCUTS: [string, string][] = [
   ['Ctrl + C / Ctrl + V', '고른 가구 복사 / 같은 색·크기로 붙여 넣기'],
   ['Ctrl + A', '가구 모두 고르기'],
   ['M', '줄자: 두 점을 눌러 거리 재기'],
-  ['줄자: Shift', '가로·세로·높이 중 한 방향으로 똑바로'],
+  ['줄자: Shift', '가로·세로·높이 중 한 방향으로 똑바로 (수평·수직 근처는 자동으로 맞춤)'],
   ['줄자: Backspace', '마지막으로 잰 것 지우기'],
   ['걷기: W A S D', '걷기 (← → 돌기, Shift 빨리)'],
   ['걷기: C / Esc', '1인칭·3인칭 바꾸기 / 걷기 끝내기'],
 ]
 
 /** 맨 위 막대: 이름, 보기 방식, 파일 저장·불러오기, 도움말 */
-export default function Header({ mode, project, onMode, onLoad, onReset, onToast }: Props) {
+export default function Header({ mode, project, onMode, onLoad, onReset, onToast, canUndo, canRedo, onUndo, onRedo }: Props) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [help, setHelp] = useState(false)
 
@@ -78,6 +83,14 @@ export default function Header({ mode, project, onMode, onLoad, onReset, onToast
 
       <div className="header-actions">
         <span className="saved">자동 저장됨</span>
+        <div className="undo-group">
+          <button className="btn ghost icon-only" onClick={onUndo} disabled={!canUndo} aria-label="되돌리기" title="되돌리기 (Ctrl+Z)">
+            <Icon name="undo" />
+          </button>
+          <button className="btn ghost icon-only" onClick={onRedo} disabled={!canRedo} aria-label="다시 하기" title="다시 하기 (Ctrl+Shift+Z)">
+            <Icon name="redo" />
+          </button>
+        </div>
         <button className="btn ghost" onClick={() => setHelp(!help)} aria-expanded={help}>
           <Icon name="help" />
           조작법

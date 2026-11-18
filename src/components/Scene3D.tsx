@@ -67,6 +67,7 @@ export default function Scene3D(props: Props) {
   const obstacles = useMemo(() => (walking ? buildObstacles(project, pieces) : null), [walking, project, pieces])
   const b = useMemo(() => bounds(project.rooms), [project.rooms])
   const compass = useRef<HTMLDivElement>(null)
+  const measureLayer = useRef<HTMLDivElement>(null) // 줄자 길이 글자를 붙이는 층
   const { onSelect, onFloorClick, onMoveFurniture, onMoveWallItem, onDragEnd } = props
   // 처음 켰을 때의 카메라 자세 (한 번만 계산)
   const [pose] = useState(() => viewPose('iso', project.rooms))
@@ -221,13 +222,16 @@ export default function Scene3D(props: Props) {
         maxDistance={outside ? 400 : 120}
       />
       )}
-      {tool === 'measure' && !walking && <Measure3D project={project} pieces={pieces} measure={props.measure} onMeasure={props.onMeasure} />}
+      {!walking && (tool === 'measure' || props.measure.list.length > 0) && (
+        <Measure3D project={project} pieces={pieces} measure={props.measure} active={tool === 'measure'} labelLayer={measureLayer} onMeasure={props.onMeasure} />
+      )}
       <CameraRig request={viewRequest} rooms={project.rooms} />
     </Canvas>
 
     {/* 3D 화면 위에 겹쳐 놓는 층. 각 항목의 화면 위치는 Projector가 매 순간 맞춰 준다 */}
     <div className="overlay">
       <Compass innerRef={compass} />
+      <div className="measure-layer" ref={measureLayer} />
       {anchors.map((a) => (
         <div
           key={a.id}

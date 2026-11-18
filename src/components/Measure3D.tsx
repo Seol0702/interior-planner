@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Html, Line } from '@react-three/drei'
+import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Project } from '../types'
 import type { WallPiece } from '../plan'
-import { distance, fmtLength, lengthParts, lockAxis, snapPlan, snapTargets, type MeasureState, type P3 } from '../measure'
+import { alignAngle, distance, fmtLength, lengthParts, lockAxis, snapPlan, snapTargets, type MeasureState, type P3 } from '../measure'
 import { mm, snap } from '../units'
 
 type Props = {
   project: Project
   pieces: WallPiece[]
   measure: MeasureState
+  active: boolean // 줄자 도구를 들고 있나 (아니면 잰 것만 보여 준다)
+  labelLayer: RefObject<HTMLDivElement | null> // 길이 글자를 붙일 화면 위 층
   onMeasure: (p: P3) => void
 }
 
@@ -37,7 +39,7 @@ function measurable(hit: THREE.Object3D) {
  * 3D 화면의 줄자: 바닥·벽·가구 어디든 두 점을 눌러 거리를 잰다.
  * 화면을 끄는 것(시점 이동)과 누르는 것을 구분하려고, 마우스 이벤트를 캔버스에서 직접 받는다.
  */
-export default function Measure3D({ project, pieces, measure, onMeasure }: Props) {
+export default function Measure3D({ project, pieces, measure, active, labelLayer, onMeasure }: Props) {
   const { camera, scene, gl } = useThree()
   const ray = useMemo(() => new THREE.Raycaster(), [])
   const targets = useMemo(() => snapTargets(project, pieces), [project, pieces])
@@ -59,10 +61,12 @@ export default function Measure3D({ project, pieces, measure, onMeasure }: Props
     let z = hit.point.y * 1000
     z = Math.abs(z) < tol ? 0 : Math.abs(z - wallHeight) < tol ? wallHeight : snap(z)
     const p = { x: s.x, y: s.y, z }
-    return shift && measure.start ? lockAxis(measure.start, p) : p
+    if (!measure.start) return p
+    return shift ? lockAxis(measure.start, p) : alignAngle(measure.start, p, tol)
   }
 
   useEffect(() => {
+    if (!active) return
     const el = gl.domElement
     const down = { x: 0, y: 0, id: -1 }
     const setNdc = (e: PointerEvent) => {
@@ -111,14 +115,16 @@ export default function Measure3D({ project, pieces, measure, onMeasure }: Props
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('keyup', onKey)
       el.style.cursor = ''
+      pointer.current.inside = false
+      setAim(null)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gl, camera, scene])
+  }, [gl, camera, scene, active])
 
   // 마우스가 움직이면 한 화면에 한 번만 다시 겨눈다 (물체가 많으면 계산이 무겁다)
   useFrame(() => {
     const p = pointer.current
-    if (!p.dirty || !p.inside) return
+    if (!p.dirty || !p.inside || !active) return
     p.dirty = false
     const next = pick(p.ndc, p.shift)
     setAim((prev) => (prev && next && prev.x === next.x && prev.y === next.y && prev.z === next.z ? prev : next))
@@ -129,14 +135,62 @@ export default function Measure3D({ project, pieces, measure, onMeasure }: Props
     pointer.current.dirty = true
   }, [measure.start])
 
+  // 길이 글자: 화면 위 층에 글자 상자를 만들어 두고, 매 화면마다 3D 위치에 맞춰 옮긴다
+  const live = active && measure.start && aim ? { id: 'live', a: measure.start, b: aim } : null
+  const labels = useMemo(
+    () =>
+      [...measure.list, ...(live ? [live] : [])]
+        .filter((m) => distance(m.a, m.b) >= 5)
+        .map((m) => ({
+          live: m.id === 'live',
+          pos: new THREE.Vector3(...toVec({ x: (m.a.x + m.b.x) / 2, y: (m.a.y + m.b.y) / 2, z: (m.a.z + m.b.z) / 2 })),
+          text: fmtLength(distance(m.a, m.b)),
+          sub: lengthParts(m.a, m.b),
+        })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [measure.list, live?.a, live?.b],
+  )
+  const nodes = useRef<HTMLDivElement[]>([])
+  useEffect(() => {
+    const layer = labelLayer.current
+    if (!layer) return
+    const els = labels.map((l) => {
+      const el = document.createElement('div')
+      el.className = `measure-label ${l.live ? 'live' : ''}`
+      const b = document.createElement('b')
+      b.textContent = l.text
+      el.appendChild(b)
+      if (l.sub) {
+        const span = document.createElement('span')
+        span.textContent = l.sub
+        el.appendChild(span)
+      }
+      el.style.visibility = 'hidden' // 첫 위치를 잡기 전에는 숨김
+      layer.appendChild(el)
+      return el
+    })
+    nodes.current = els
+    return () => els.forEach((el) => el.remove())
+  }, [labels, labelLayer])
+  const v = useMemo(() => new THREE.Vector3(), [])
+  useFrame(({ camera, size }) => {
+    labels.forEach((l, i) => {
+      const el = nodes.current[i]
+      if (!el) return
+      v.copy(l.pos).project(camera)
+      el.style.transform = `translate(${((v.x * 0.5 + 0.5) * size.width).toFixed(1)}px, ${((-v.y * 0.5 + 0.5) * size.height).toFixed(1)}px) translate(-50%, -50%)`
+      el.style.visibility = v.z < 1 ? 'visible' : 'hidden'
+    })
+  })
+
   return (
     <group userData={{ noMeasure: true }}>
       {measure.list.map((m) => (
         <Dimension3D key={m.id} a={m.a} b={m.b} />
       ))}
-      {measure.start && aim && <Dimension3D a={measure.start} b={aim} live />}
-      {measure.start && !aim && <Dot p={measure.start} />}
-      {aim && (
+      {active && measure.start && aim && <Dimension3D a={measure.start} b={aim} live />}
+      {active && measure.start && !aim && <Dot p={measure.start} />}
+      {active && aim && (
         <mesh position={toVec(aim)} renderOrder={20}>
           <sphereGeometry args={[0.045, 16, 10]} />
           <meshBasicMaterial color={COLOR} transparent opacity={0.45} depthTest={false} />
@@ -155,24 +209,13 @@ function Dot({ p }: { p: P3 }) {
   )
 }
 
-/** 3D 치수선: 선 + 양 끝 점 + 가운데 길이 글자 (물체에 가려도 보이게 맨 앞에 그린다) */
+/** 3D 치수선: 선 + 양 끝 점 (물체에 가려도 보이게 맨 앞에 그린다). 길이 글자는 화면 위 층에 따로 붙인다 */
 function Dimension3D({ a, b, live = false }: { a: P3; b: P3; live?: boolean }) {
-  const len = distance(a, b)
-  const sub = lengthParts(a, b)
-  const mid: [number, number, number] = [mm((a.x + b.x) / 2), mm((a.z + b.z) / 2), mm((a.y + b.y) / 2)]
   return (
     <group>
       <Line points={[toVec(a), toVec(b)]} color={COLOR} lineWidth={2.5} dashed={live} dashSize={0.08} gapSize={0.05} depthTest={false} renderOrder={19} />
       <Dot p={a} />
       <Dot p={b} />
-      {len >= 5 && (
-        <Html position={mid} center zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
-          <div className={`measure-label ${live ? 'live' : ''}`}>
-            <b>{fmtLength(len)}</b>
-            {sub && <span>{sub}</span>}
-          </div>
-        </Html>
-      )}
     </group>
   )
 }

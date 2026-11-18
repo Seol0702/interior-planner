@@ -19,6 +19,7 @@ export type Tone =
   | 'book2'
   | 'book3'
   | 'mirror' // 거울·유리
+  | 'glass' // 색유리 상판 (포인트 색, 반투명)
 
 /** 부품 하나. x,y,z는 부품 중심 (가구 바닥 중심이 0,0,0 / y가 위쪽 / +z가 가구 앞쪽), 단위 mm */
 export type Part = {
@@ -151,6 +152,25 @@ const builders: Record<ShapeId, Builder> = {
       parts.push(cyl('dark', dx, fh * (i + 0.5), D / 2 - 6, 24, 12, 'z'))
     }
     return parts
+  },
+
+  // 판다리 유리 책상: 양옆이 통판 다리, 위는 색유리 상판, 다리 사이에 가림판
+  panelDesk: (W, D, H) => {
+    const g = 12 // 유리 두께
+    const t = Math.min(50, W * 0.04) // 옆판 두께
+    const ph = H - g // 옆판 높이 (유리 바로 밑까지)
+    const px = W / 2 - Math.min(80, W * 0.05) - t / 2 // 유리가 옆판보다 조금 튀어나오게
+    const pd = D - Math.min(100, D * 0.12) // 옆판 깊이
+    const inner = 2 * px - t // 옆판 사이 너비
+    // 혼자 쓰는 책상은 뒤쪽, 마주 앉는 큰 테이블은 가운데에 가림판
+    const mz = D >= 1000 ? 0 : -pd / 2 + 60
+    return [
+      box('glass', 0, H - g / 2, 0, W, g, D), // 유리 상판
+      ...[-1, 1].map((s) => box('main', s * px, ph / 2, 0, t, ph, pd)), // 옆판 다리
+      box('main', 0, ph - Math.min(200, ph * 0.28), mz, inner, Math.min(400, ph * 0.55), 22), // 가림판
+      box('metal', 0, ph - 10, pd / 2 - 30, inner, 20, 30), // 유리 받침대 (앞)
+      box('metal', 0, ph - 10, -pd / 2 + 30, inner, 20, 30), // 유리 받침대 (뒤)
+    ]
   },
 
   wardrobe: (W, D, H) => {
@@ -590,7 +610,8 @@ export function toneColor(tone: Tone, main: string, accent: string): string {
   switch (tone) {
     case 'main': return main
     case 'accent':
-    case 'glow': return accent
+    case 'glow':
+    case 'glass': return accent
     case 'dark': return shade(main, -0.4)
     case 'metal': return '#a1a1aa'
     case 'screen': return '#1f2125'

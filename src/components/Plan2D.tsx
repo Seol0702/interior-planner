@@ -7,7 +7,7 @@ import type { Visible } from './Scene3D'
 import { WALL_THICKNESS, bounds, findPiece, footprint, wallItemSpan, type WallPiece } from '../plan'
 import { resolveItem } from '../library'
 import { fmtM, toPyeong } from '../units'
-import { distance, fmtLength, lengthParts, lockAxis, snapPlan, snapTargets, type MeasureState, type P3 } from '../measure'
+import { alignAngle, distance, fmtLength, lengthParts, lockAxis, snapPlan, snapTargets, type MeasureState, type P3 } from '../measure'
 
 type DragType = 'room' | 'furniture' | 'wallItem' | 'note'
 
@@ -80,7 +80,8 @@ export default function Plan2D(props: Props) {
     const p = toPlan(e)
     const s = targets ? snapPlan(targets, p, fs * 0.7) : p
     const q = { x: s.x, y: s.y, z: 0 }
-    return e.shiftKey && measure.start ? lockAxis(measure.start, q) : q
+    if (!measure.start) return q
+    return e.shiftKey ? lockAxis(measure.start, q) : alignAngle(measure.start, q, fs * 0.7)
   }
 
   const move = (e: React.PointerEvent) => {
@@ -189,8 +190,9 @@ export default function Plan2D(props: Props) {
               width={item.width}
               height={item.depth}
               rx={ROUND.includes(item.shape) || (item.shape === 'rug' && item.width === item.depth) ? item.width / 2 : 20}
-              fill={f.color ?? item.color}
-              fillOpacity={item.mount === 'ceiling' ? 0.45 : 1}
+              // 유리 상판 책상은 위에서 보면 유리(포인트 색)가 보인다
+              fill={item.shape === 'panelDesk' ? (f.accent ?? item.accent) : (f.color ?? item.color)}
+              fillOpacity={item.mount === 'ceiling' ? 0.45 : item.shape === 'panelDesk' ? 0.6 : 1}
               stroke={selected ? '#2563eb' : '#52525b'}
               strokeWidth={selected ? fs * 0.2 : fs * 0.08}
               strokeDasharray={item.mount === 'ceiling' ? `${fs * 0.3} ${fs * 0.2}` : undefined}
@@ -296,11 +298,14 @@ export default function Plan2D(props: Props) {
       ))}
 
       {/* 줄자 */}
+      {/* 잰 줄자는 지우기 전까지 늘 보인다 (가구를 옮기면서 보게) */}
+      <g pointerEvents="none">
+        {measure.list.map((m) => (
+          <Dimension key={m.id} a={m.a} b={m.b} fs={fs} />
+        ))}
+      </g>
       {tool === 'measure' && (
         <g pointerEvents="none">
-          {measure.list.map((m) => (
-            <Dimension key={m.id} a={m.a} b={m.b} fs={fs} />
-          ))}
           {measure.start && aim && <Dimension a={measure.start} b={aim} fs={fs} live />}
           {measure.start && !aim && <circle cx={measure.start.x} cy={measure.start.y} r={fs * 0.22} fill={MEASURE} />}
           {aim && <circle cx={aim.x} cy={aim.y} r={fs * 0.3} fill="none" stroke={MEASURE} strokeWidth={fs * 0.08} />}

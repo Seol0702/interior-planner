@@ -113,7 +113,7 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
       {parts.map((p, i) => (
         <mesh
           key={i}
-          castShadow={item.mount !== 'ceiling'}
+          castShadow={item.mount !== 'ceiling' && p.tone !== 'glass'}
           receiveShadow
           position={[mm(p.x), mm(p.y), mm(p.z)]}
           rotation={p.axis === 'z' ? [Math.PI / 2, 0, 0] : p.axis === 'x' ? [0, 0, Math.PI / 2] : [0, 0, 0]}
@@ -124,7 +124,11 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
           {p.kind === 'ball' && <sphereGeometry args={[0.5, 24, 16]} />}
           <meshStandardMaterial
             color={toneColor(p.tone, main, accent)}
-            roughness={0.8}
+            roughness={p.tone === 'glass' ? 0.08 : 0.8}
+            metalness={p.tone === 'glass' ? 0.15 : 0}
+            transparent={p.tone === 'glass'}
+            opacity={p.tone === 'glass' ? 0.55 : 1}
+            depthWrite={p.tone !== 'glass'}
             emissive={glowing && p.tone === 'glow' ? '#ffd28a' : '#000000'}
             emissiveIntensity={glowing && p.tone === 'glow' ? 1.4 : 0}
           />

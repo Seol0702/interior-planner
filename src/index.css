@@ -103,6 +103,14 @@ ul {
   margin-right: 6px;
   font-size: 12px;
   color: var(--muted);
+  white-space: nowrap;
+}
+
+/* 좁은 화면에서는 "자동 저장됨" 글자를 빼서 단추 자리를 만든다 */
+@media (max-width: 1100px) {
+  .saved {
+    display: none;
+  }
 }
 
 .body {
@@ -1733,6 +1741,12 @@ kbd {
   font-size: 11px;
 }
 
+.measure-layer > .measure-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
 .measure-label.live {
   opacity: 0.88;
 }
@@ -1743,4 +1757,10 @@ kbd {
   color: var(--text);
   font-size: 12.5px;
   line-height: 1.5;
+}
+
+/* 되돌리기·다시 하기 단추 */
+.undo-group {
+  display: flex;
+  gap: 2px;
 }
