@@ -406,7 +406,7 @@ const builders: Record<ShapeId, Builder> = {
     ]
   },
 
-  // 판다리 책상: 컴퓨터 책상과 같은 상판에, 다리만 양옆 통판으로 + 뒤쪽 가림판
+  // 판다리 책상: 컴퓨터 책상과 같은 상판에, 다리만 양옆 통판으로 + 뒤쪽 가림판 (다리·가림판은 포인트 색이라 상판과 다른 색으로 바꿀 수 있다)
   panelLegDesk: (W, D, H) => {
     const top = 30 // 상판 두께 (컴퓨터 책상과 같다)
     const t = Math.min(30, W * 0.03) // 옆판 두께
@@ -414,8 +414,8 @@ const builders: Record<ShapeId, Builder> = {
     const mh = Math.min(350, ph * 0.45) // 가림판 높이
     return [
       box('main', 0, H - top / 2, 0, W, top, D), // 상판
-      ...[-1, 1].map((s) => box('main', s * (W / 2 - t / 2), ph / 2, 0, t, ph, D)), // 옆판 다리
-      box('main', 0, ph - mh / 2, -D / 2 + 60, W - 2 * t, mh, 18), // 가림판
+      ...[-1, 1].map((s) => box('accent', s * (W / 2 - t / 2), ph / 2, 0, t, ph, D)), // 옆판 다리
+      box('accent', 0, ph - mh / 2, -D / 2 + 60, W - 2 * t, mh, 18), // 가림판
     ]
   },
 
