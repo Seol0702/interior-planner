@@ -123,6 +123,10 @@ export type ShapeId =
   | 'speaker'
   | 'petHouse'
   | 'partsCabinet'
+  | 'printer3d'
+  | 'printer'
+  | 'microwave'
+  | 'showerCaddy'
 
 /** 가구 라이브러리에 들어있는 "부품" (KiCad의 심볼+풋프린트 같은 것) */
 export type FurnitureLibraryItem = {

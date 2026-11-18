@@ -68,6 +68,7 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('fridge', '양문형 냉장고', '주방', 'fridge', 900, 900, 1800, '#8d939b', '#b8bec6'),
   item('fridge-small', '일반 냉장고', '주방', 'fridge', 600, 650, 1700, '#eceef0', '#f6f7f8'),
   item('fridge-2door-small', '소형 2도어 냉장고 (냉동·냉장)', '주방', 'fridgeTopFreezer', 480, 550, 1250, '#eceef0', '#f6f7f8'),
+  item('microwave', '전자레인지', '주방', 'microwave', 480, 360, 280, '#e8e8e6', '#cfd2d6', { base: 850 }),
 
   // ── 가전 ──
   item('washer', '세탁기', '가전', 'washer', 600, 650, 850, '#eceef0', '#cfd4da'),
@@ -152,10 +153,13 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('pc-tower', '컴퓨터 본체', '서재', 'pcTower', 210, 450, 460, '#26272b', '#3a3d44'),
   item('laptop', '노트북', '서재', 'laptop', 340, 240, 230, '#b9bcc2', '#2f2f33', { base: 740 }),
   item('soldering-station', '인두기 (납땜 스테이션)', '서재', 'solderStation', 300, 180, 220, '#3a3d44', '#d14b3d', { base: 740 }),
+  item('printer-3d', '3D 프린터 (필라멘트 보관함)', '서재', 'printer3d', 420, 420, 720, '#8e9399', '#3a3d42', { base: 740 }),
+  item('printer', '프린터 (복합기)', '서재', 'printer', 430, 380, 240, '#eceef0', '#d4d7db', { base: 740 }),
   item('chair-mesh', '메쉬 의자', '서재', 'officeChair', 620, 620, 1050, '#52525b', '#71717a'),
   item('chair-study', '원목 공부 의자', '서재', 'chair', 450, 500, 820, '#b08e68', '#b08e68'),
   item('bookshelf-wide', '와이드 책장', '서재', 'bookshelf', 1200, 300, 1800, '#f1efe9', '#f1efe9'),
   item('bookshelf-low', '낮은 책장', '서재', 'bookshelf', 800, 300, 800, '#c9a67a', '#c9a67a'),
+  item('bookshelf-empty', '빈 원목 책장', '서재', 'openCabinet', 800, 300, 1800, '#b89a78', '#c9ad8a'),
   item('cube-shelf-1x4', '4칸 큐브 선반', '서재', 'cubeShelf', 390, 390, 1470, '#f4f4f2', '#c9b79f'),
   item('cube-shelf-4x4', '큐브 선반 4×4', '서재', 'cubeShelf', 1470, 390, 1470, '#3f3f46', '#c9b79f'),
   item('file-cabinet', '이동식 서랍', '서재', 'drawers', 400, 500, 600, '#e4e4e7', '#f4f4f5'),
@@ -180,6 +184,7 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('toilet', '변기', '욕실', 'toilet', 400, 700, 750, '#f6f6f4', '#ececea'),
   item('washbasin', '세면대', '욕실', 'washbasin', 600, 480, 850, '#c9a67a', '#ddc4a3'),
   item('bath-cabinet', '욕실 수납장', '욕실', 'wardrobe', 400, 300, 1500, '#f4f4f2', '#f7f7f5'),
+  item('shower-caddy', '샤워 바구니 (욕실 용품)', '욕실', 'showerCaddy', 320, 180, 300, '#e9e7e2', '#7fb3d5'),
   item('laundry-basket', '빨래 바구니', '욕실', 'puck', 400, 400, 550, '#d9c7ad', '#c4ae90'),
 
   // ── 가전 ──

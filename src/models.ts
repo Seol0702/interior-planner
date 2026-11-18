@@ -386,6 +386,68 @@ const builders: Record<ShapeId, Builder> = {
     return parts
   },
 
+  // 3D 프린터: 회색 상자 몸체 + 짙은 유리문 + 터치 화면, 위에 필라멘트 보관함(반투명 덮개 안에 실타래 4개)
+  printer3d: (W, D, H) => {
+    const bodyH = H * 0.64 // 프린터 몸체 높이
+    const topH = H - bodyH // 위 보관함 높이
+    const spoolW = (W * 0.86) / 4
+    const spools: Tone[] = ['white', 'book2', 'leaf', 'book1'] // 필라멘트 색 (흰·파랑·초록·빨강)
+    return [
+      box('main', 0, bodyH / 2, 0, W, bodyH, D), // 몸체
+      box('screen', -W * 0.08, bodyH * 0.47, D / 2 + 1, W * 0.7, bodyH * 0.84, 4), // 짙은 유리문
+      box('white', W * 0.28, bodyH * 0.55, D / 2 + 6, 34, 12, 10), // 문 손잡이
+      box('dark', -W * 0.3, bodyH - 25, D / 2 + 14, W * 0.36, H * 0.085, 14), // 터치 화면 틀
+      box('accent', -W * 0.3, bodyH - 25, D / 2 + 22, W * 0.32, H * 0.065, 2), // 터치 화면
+      box('dark', 0, 6, D / 2 - 30, W * 0.2, 12, 20), // 아래 통풍구
+      box('accent', 0, bodyH + topH * 0.27, 0, W * 1.02, topH * 0.54, D * 0.92), // 보관함 아랫부분
+      ...spools.map((tone, i) => cyl(tone, -W * 0.43 + spoolW * (i + 0.5), bodyH + topH * 0.6, -D * 0.04, topH * 0.72, spoolW * 0.82, 'x')), // 실타래
+      cyl('glass', 0, bodyH + topH * 0.58, -D * 0.04, topH * 0.84, W * 0.98, 'x'), // 반투명 덮개
+    ]
+  },
+
+  // 프린터(복합기): 몸체 + 위 스캐너 덮개 + 조작부 + 종이 나오는 곳 + 앞 출력 받침
+  printer: (W, D, H) => [
+    box('main', 0, (H - 30) / 2, -30, W, H - 30, D - 60), // 몸체
+    box('accent', 0, H - 15, -30, W - 10, 30, D - 70), // 스캐너 덮개
+    box('dark', W * 0.28, H - 45, D / 2 - 55, W * 0.32, 40, 30), // 조작부
+    box('screen', W * 0.28, H - 40, D / 2 - 39, W * 0.2, 22, 2), // 작은 화면
+    box('dark', 0, H * 0.42, D / 2 - 59, W * 0.7, 24, 4), // 종이 나오는 곳
+    box('accent', 0, H * 0.3, D / 2 - 30, W * 0.55, 8, 60), // 출력 받침
+    box('accent', 0, 20, D / 2 - 59, W * 0.8, 30, 4), // 아래 용지함 앞판
+  ],
+
+  // 전자레인지: 몸체 + 문(창) + 오른쪽 조작부 + 문 손잡이
+  microwave: (W, D, H) => [
+    box('main', 0, H / 2 + 5, 0, W, H - 10, D), // 몸체
+    ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => box('dark', sx * (W / 2 - 40), 3, sz * (D / 2 - 40), 30, 6, 30))), // 발
+    box('accent', -W * 0.12, H / 2 + 5, D / 2 + 2, W * 0.74, H * 0.88, 6), // 문
+    box('screen', -W * 0.14, H / 2 + 5, D / 2 + 6, W * 0.56, H * 0.6, 2), // 문 창
+    box('dark', W * 0.37, H / 2 + 5, D / 2 + 2, W * 0.22, H * 0.88, 6), // 조작부
+    box('glow', W * 0.37, H * 0.75, D / 2 + 6, W * 0.14, H * 0.08, 2), // 표시창
+    cyl('metal', W * 0.37, H * 0.42, D / 2 + 8, W * 0.08, 10, 'z'), // 다이얼
+    box('metal', W * 0.22, H / 2 + 5, D / 2 + 10, 14, H * 0.5, 10), // 문 손잡이
+  ],
+
+  // 샤워 바구니: 손잡이 달린 바구니 + 샴푸·린스(펌프)·바디워시·스펀지
+  showerCaddy: (W, D, H) => {
+    const bh = H * 0.38 // 바구니 높이
+    const hb = H * 0.7 // 큰 병 높이
+    return [
+      box('main', 0, 5, 0, W, 10, D), // 바닥
+      ...[-1, 1].map((s) => box('main', 0, bh / 2, s * (D / 2 - 4), W, bh, 8)), // 앞·뒤 벽
+      ...[-1, 1].map((s) => box('main', s * (W / 2 - 4), bh / 2, 0, 8, bh, D)), // 옆 벽
+      ...[-1, 1].map((s) => box('main', s * W * 0.06, (H + bh) / 2 - 10, 0, 12, H - bh, 12)), // 손잡이 기둥
+      box('main', 0, H - 10, 0, W * 0.24, 16, 16), // 손잡이
+      cyl('accent', -W * 0.32, 10 + hb / 2, -D * 0.12, Math.min(75, W * 0.24), hb), // 샴푸
+      cyl('white', -W * 0.32, 10 + hb + 15, -D * 0.12, 22, 30), // 샴푸 펌프
+      cyl('white', -W * 0.19, 10 + (hb * 0.9) / 2, D * 0.12, Math.min(60, W * 0.18), hb * 0.9), // 린스
+      cyl('accent', -W * 0.19, 10 + hb * 0.9 + 15, D * 0.12, 20, 30), // 린스 펌프
+      box('book2', W * 0.22, 10 + (hb * 0.78) / 2, -D * 0.12, Math.min(85, W * 0.26), hb * 0.78, Math.min(50, D * 0.3)), // 바디워시
+      cyl('white', W * 0.22, 10 + hb * 0.78 + 10, -D * 0.12, 30, 20), // 바디워시 뚜껑
+      box('book3', W * 0.34, 10 + 25, D * 0.2, Math.min(80, W * 0.24), 50, Math.min(50, D * 0.3)), // 스펀지
+    ]
+  },
+
   // 소형 2도어 냉장고: 위 냉동실(작은 문) + 아래 냉장실(큰 문). 문 사이 틈과 손잡이
   fridgeTopFreezer: (W, D, H) => {
     const foot = 30 // 바닥과 띄운 높이
