@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import type { FurnitureInstance, FurnitureLibraryItem } from '../types'
 import { buildParts, toneColor } from '../models'
 import { mm, toMm } from '../units'
+import { ctrlHeld, isAddClick } from '../keys'
 
 type Props = {
   instance: FurnitureInstance
@@ -26,7 +27,6 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
   const controls = useThree((state) => state.controls) as { enabled: boolean } | null
   // useRef: 화면을 다시 그리지 않아도 되는 값 보관 (드래그 상태)
   const drag = useRef<{ dx: number; dy: number } | null>(null)
-  const ctrlPress = useRef<{ x: number; y: number } | null>(null) // Ctrl을 누른 채 누른 자리
 
   const parts = useMemo(
     () => buildParts(item.shape, item.width, item.depth, item.height),
@@ -46,15 +46,14 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
   }
 
   const handleDown = (e: ThreeEvent<PointerEvent>) => {
-    // Ctrl(⌘·Shift)+클릭은 여러 개 고르기. 끌면 화면 회전이 되도록 여기서 막지 않고, 손을 뗄 때 판단한다
-    // (맥의 Ctrl+클릭은 오른쪽 버튼으로 올 때도 있다)
-    if (interactive && (e.button === 0 || e.button === 2) && (e.ctrlKey || e.metaKey || e.shiftKey)) {
-      ctrlPress.current = { x: e.clientX, y: e.clientY }
+    // Ctrl(⌘)+왼쪽 클릭: 누르는 순간 바로 여러 개 고르기에 더하거나 뺀다 (잡아서 끌지는 않는다)
+    if (interactive && isAddClick(e)) {
+      e.stopPropagation()
+      onSelect(true)
       return
     }
-    ctrlPress.current = null
-    // 왼쪽 버튼만 가구를 잡는다. (오른쪽 버튼·Ctrl+드래그는 화면 회전용)
-    if (!interactive || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey) return
+    // 왼쪽 버튼만 가구를 잡는다. (오른쪽 버튼·Shift+드래그는 화면 회전용)
+    if (!interactive || e.button !== 0 || e.shiftKey) return
     e.stopPropagation() // 뒤에 있는 다른 물체까지 클릭되지 않게
     onSelect()
     const p = floorPoint(e)
@@ -72,15 +71,6 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
   }
 
   const handleUp = (e: ThreeEvent<PointerEvent>) => {
-    const press = ctrlPress.current
-    if (press) {
-      ctrlPress.current = null
-      if (Math.hypot(e.clientX - press.x, e.clientY - press.y) <= 4) {
-        e.stopPropagation()
-        onSelect(true)
-      }
-      return
-    }
     if (!drag.current) return
     drag.current = null
     ;(e.target as unknown as Element).releasePointerCapture(e.pointerId)
@@ -105,14 +95,7 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
       onContextMenu={(e) => {
         if (!interactive || e.delta > 4) return
         e.stopPropagation()
-        if (e.ctrlKey || e.metaKey || e.shiftKey) {
-          // 맥의 Ctrl+클릭은 누르는 순간 우클릭(메뉴)으로 온다 → 여기서 더하고, 손 뗄 때는 다시 하지 않게
-          if (ctrlPress.current) {
-            ctrlPress.current = null
-            onSelect(true)
-          }
-          return
-        }
+        if (ctrlHeld(e)) return // Ctrl+클릭은 누르는 순간 이미 처리했다 (맥은 우클릭으로도 한 번 더 온다)
         onSelect()
       }}
       onPointerOver={() => (document.body.style.cursor = 'grab')}

@@ -127,7 +127,7 @@ export function GroupCard({ names, onRotate, onDuplicate, onDelete, onClose }: G
       <p className="group-names">
         {[...counts].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n)).join(', ')}
       </p>
-      <p className="hint">Ctrl(또는 Shift)+클릭으로 더 고르거나 빼요. Ctrl을 누르고 있으면 이 카드가 흐려져서 밑에 있는 가구도 고를 수 있어요.</p>
+      <p className="hint">Ctrl+왼쪽 클릭으로 더 고르거나 빼요 (맥은 ⌘도 돼요). Ctrl을 누르고 있으면 이 카드가 흐려져서 밑에 있는 가구도 고를 수 있어요.</p>
       <div className="inspector-actions">
         <button className="btn sm" onClick={onRotate} title="R">
           <Icon name="rotate" size={15} />

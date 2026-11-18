@@ -7,6 +7,7 @@ import type { Visible } from './Scene3D'
 import { WALL_THICKNESS, bounds, findPiece, footprint, wallItemSpan, type WallPiece } from '../plan'
 import { resolveItem } from '../library'
 import { fmtM, toPyeong } from '../units'
+import { isAddClick } from '../keys'
 import { alignAngle, distance, fmtLength, lengthParts, lockAxis, snapPlan, snapTargets, type MeasureState, type P3 } from '../measure'
 
 type DragType = 'room' | 'furniture' | 'wallItem' | 'note'
@@ -63,14 +64,15 @@ export default function Plan2D(props: Props) {
 
   const start = (e: React.PointerEvent, type: DragType, id: string, originX: number, originY: number) => {
     // 전선·메모 도구를 들고 있을 때는 물건을 잡지 않고, 평면 클릭으로 넘긴다
-    // (맥의 Ctrl+클릭은 오른쪽 버튼으로 올 때도 있어서 그것도 받는다)
-    const additive = e.ctrlKey || e.metaKey || e.shiftKey
-    if ((e.button !== 0 && !(e.button === 2 && e.ctrlKey)) || !picking) return
-    e.stopPropagation()
-    if (type === 'furniture' && additive) {
+    if (!picking) return
+    // Ctrl(⌘)+왼쪽 클릭: 가구를 여러 개 고르기에 더하거나 뺀다 (맥은 오른쪽 버튼으로 바뀌어 올 때도 있다)
+    if (type === 'furniture' && isAddClick(e)) {
+      e.stopPropagation()
       onSelect({ type, id }, true) // Ctrl+클릭: 끌지 않고 고르기만
       return
     }
+    if (e.button !== 0) return
+    e.stopPropagation()
     onSelect({ type, id })
     const p = toPlan(e)
     drag.current = { type, id, dx: originX - p.x, dy: originY - p.y }
@@ -289,7 +291,8 @@ export default function Plan2D(props: Props) {
           className="issue"
           onPointerDown={(e) => {
             e.stopPropagation()
-            onSelect(issue.target, e.ctrlKey || e.metaKey || e.shiftKey) // Ctrl을 누르고 있으면 여러 개 고르기에 더한다
+            if (e.button !== 0 && !isAddClick(e)) return
+            onSelect(issue.target, isAddClick(e)) // Ctrl을 누르고 있으면 여러 개 고르기에 더한다
           }}
           onPointerEnter={() => setHoverIssue(issue.id)}
           onPointerLeave={() => setHoverIssue((h) => (h === issue.id ? null : h))}

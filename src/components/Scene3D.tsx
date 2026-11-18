@@ -20,6 +20,7 @@ import Surroundings, { type Ground } from './Surroundings'
 import Measure3D from './Measure3D'
 import type { MeasureState, P3 } from '../measure'
 import { buildObstacles } from '../walk'
+import { ctrlHeld, isAddClick } from '../keys'
 import { STOREY, type Building } from '../site'
 
 const LEVEL_NAME = { error: '오류', warn: '주의', info: '참고' }
@@ -102,12 +103,14 @@ export default function Scene3D(props: Props) {
           <button
             className={`issue-dot ${issue.level}`}
             aria-label={issue.message}
-            // Ctrl·Shift를 누르고 있으면 여러 개 고르기에 더한다 (가구 한가운데의 ! 를 눌러도)
-            onClick={(e) => onSelect(issue.target, e.ctrlKey || e.metaKey || e.shiftKey)}
-            onContextMenu={(e) => {
+            // Ctrl(⌘)+왼쪽 클릭: 누르는 순간 여러 개 고르기에 더한다 (가구 한가운데의 ! 를 눌러도)
+            onPointerDown={(e) => {
+              if (!isAddClick(e)) return
               e.preventDefault()
-              if (e.ctrlKey) onSelect(issue.target, true) // 맥의 Ctrl+클릭은 우클릭으로 온다
+              onSelect(issue.target, true)
             }}
+            onClick={(e) => !ctrlHeld(e) && onSelect(issue.target)}
+            onContextMenu={(e) => e.preventDefault()}
           >
             !
           </button>
