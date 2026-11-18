@@ -67,6 +67,7 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('island', '아일랜드 식탁 (홈바)', '주방', 'counter', 1400, 700, 900, '#f1efe9', '#d8d2c6'),
   item('fridge', '양문형 냉장고', '주방', 'fridge', 900, 900, 1800, '#8d939b', '#b8bec6'),
   item('fridge-small', '일반 냉장고', '주방', 'fridge', 600, 650, 1700, '#eceef0', '#f6f7f8'),
+  item('fridge-2door-small', '소형 2도어 냉장고 (냉동·냉장)', '주방', 'fridgeTopFreezer', 480, 550, 1250, '#eceef0', '#f6f7f8'),
   item('kimchi-fridge', '스탠드 김치냉장고', '주방', 'drawers', 700, 750, 1800, '#d8d4cc', '#ecebe7'),
 
   // ── 가전 ──

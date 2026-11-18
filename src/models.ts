@@ -258,6 +258,26 @@ const builders: Record<ShapeId, Builder> = {
     return parts
   },
 
+  // 소형 2도어 냉장고: 위 냉동실(작은 문) + 아래 냉장실(큰 문). 문 사이 틈과 손잡이
+  fridgeTopFreezer: (W, D, H) => {
+    const foot = 30 // 바닥과 띄운 높이
+    const doors = H - foot - 10 // 문 전체 높이
+    const upper = doors * 0.34 // 냉동실 문
+    const lower = doors - upper - 8 // 냉장실 문
+    const z = D / 2 - 25 // 문 앞면 위치
+    const lowerY = foot + lower / 2
+    const upperY = foot + lower + 8 + upper / 2
+    return [
+      box('main', 0, H / 2 + foot / 2, -25, W, H - foot, D - 50), // 본체
+      box('dark', 0, foot / 2, -25, W - 40, foot, D - 90), // 아래 받침
+      box('accent', 0, upperY, z, W - 8, upper, 30), // 냉동실 문
+      box('accent', 0, lowerY, z, W - 8, lower, 30), // 냉장실 문
+      box('dark', 0, foot + lower + 4, z - 4, W - 8, 8, 22), // 문 사이 틈
+      box('dark', W / 2 - 40, upperY - upper * 0.25, D / 2 - 4, 16, upper * 0.4, 18), // 냉동실 손잡이 (아래쪽)
+      box('dark', W / 2 - 40, lowerY + lower * 0.3, D / 2 - 4, 16, lower * 0.3, 18), // 냉장실 손잡이 (위쪽)
+    ]
+  },
+
   // 판다리 책상: 컴퓨터 책상과 같은 상판에, 다리만 양옆 통판으로 + 뒤쪽 가림판
   panelLegDesk: (W, D, H) => {
     const top = 30 // 상판 두께 (컴퓨터 책상과 같다)
