@@ -46,8 +46,9 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
   }
 
   const handleDown = (e: ThreeEvent<PointerEvent>) => {
-    // Ctrl+클릭은 여러 개 고르기. 끌면 화면 회전이 되도록 여기서 막지 않고, 손을 뗄 때 판단한다
-    if (interactive && e.button === 0 && (e.ctrlKey || e.metaKey)) {
+    // Ctrl(⌘·Shift)+클릭은 여러 개 고르기. 끌면 화면 회전이 되도록 여기서 막지 않고, 손을 뗄 때 판단한다
+    // (맥의 Ctrl+클릭은 오른쪽 버튼으로 올 때도 있다)
+    if (interactive && (e.button === 0 || e.button === 2) && (e.ctrlKey || e.metaKey || e.shiftKey)) {
       ctrlPress.current = { x: e.clientX, y: e.clientY }
       return
     }
@@ -104,7 +105,14 @@ export default function FurnitureMesh({ instance, item, selected, wallHeight, li
       onContextMenu={(e) => {
         if (!interactive || e.delta > 4) return
         e.stopPropagation()
-        if (e.ctrlKey || e.metaKey) return // 맥의 Ctrl+클릭은 우클릭으로도 오는데, 이미 손 뗄 때 처리했다
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+          // 맥의 Ctrl+클릭은 누르는 순간 우클릭(메뉴)으로 온다 → 여기서 더하고, 손 뗄 때는 다시 하지 않게
+          if (ctrlPress.current) {
+            ctrlPress.current = null
+            onSelect(true)
+          }
+          return
+        }
         onSelect()
       }}
       onPointerOver={() => (document.body.style.cursor = 'grab')}

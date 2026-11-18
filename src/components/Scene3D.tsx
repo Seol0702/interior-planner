@@ -22,6 +22,8 @@ import type { MeasureState, P3 } from '../measure'
 import { buildObstacles } from '../walk'
 import { STOREY, type Building } from '../site'
 
+const LEVEL_NAME = { error: '오류', warn: '주의', info: '참고' }
+
 export type Visible = { walls: boolean; furniture: boolean; electric: boolean; notes: boolean; expandNotes: boolean }
 
 /** 걷기 모드 설정 (null이면 평소 화면) */
@@ -96,9 +98,24 @@ export default function Scene3D(props: Props) {
       id: `issue:${issue.id}`,
       pos: [mm(issue.x), 0.05, mm(issue.y)],
       node: (
-        <button className={`issue-dot ${issue.level}`} title={issue.message} onClick={() => onSelect(issue.target)}>
-          !
-        </button>
+        <div className="issue-pin">
+          <button
+            className={`issue-dot ${issue.level}`}
+            aria-label={issue.message}
+            // Ctrl·Shift를 누르고 있으면 여러 개 고르기에 더한다 (가구 한가운데의 ! 를 눌러도)
+            onClick={(e) => onSelect(issue.target, e.ctrlKey || e.metaKey || e.shiftKey)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              if (e.ctrlKey) onSelect(issue.target, true) // 맥의 Ctrl+클릭은 우클릭으로 온다
+            }}
+          >
+            !
+          </button>
+          {/* 마우스를 올리면 뜨는 설명 */}
+          <div className="issue-tip" role="tooltip">
+            <b>{LEVEL_NAME[issue.level]}</b> {issue.message}
+          </div>
+        </div>
       ),
     })
   }
@@ -223,7 +240,12 @@ export default function Scene3D(props: Props) {
       />
       )}
       {!walking && (tool === 'measure' || props.measure.list.length > 0) && (
-        <Measure3D project={project} pieces={pieces} measure={props.measure} active={tool === 'measure'} labelLayer={measureLayer} onMeasure={props.onMeasure} />
+        <Measure3D project={project} pieces={pieces} measure={props.measure} active={tool === 'measure'} labelLayer={measureLayer}
+          selectedId={selection?.type === 'measure' ? selection.id : null}
+          pickable={interactive}
+          onPick={(id) => onSelect({ type: 'measure', id })}
+          onMeasure={props.onMeasure}
+        />
       )}
       <CameraRig request={viewRequest} rooms={project.rooms} />
     </Canvas>

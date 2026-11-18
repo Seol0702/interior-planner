@@ -45,6 +45,7 @@ export default function Plan2D(props: Props) {
   const [frozen, setFrozen] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [cursor, setCursor] = useState<Point | null>(null) // 전선 미리보기용 마우스 위치
   const [aim, setAim] = useState<P3 | null>(null) // 줄자 끝이 지금 붙을 자리
+  const [hoverIssue, setHoverIssue] = useState<string | null>(null) // 마우스를 올린 검사 표시
   const targets = useMemo(() => (tool === 'measure' ? snapTargets(project, pieces) : null), [tool, project, pieces])
 
   const b = bounds(rooms)
@@ -62,9 +63,11 @@ export default function Plan2D(props: Props) {
 
   const start = (e: React.PointerEvent, type: DragType, id: string, originX: number, originY: number) => {
     // 전선·메모 도구를 들고 있을 때는 물건을 잡지 않고, 평면 클릭으로 넘긴다
-    if (e.button !== 0 || !picking) return
+    // (맥의 Ctrl+클릭은 오른쪽 버튼으로 올 때도 있어서 그것도 받는다)
+    const additive = e.ctrlKey || e.metaKey || e.shiftKey
+    if ((e.button !== 0 && !(e.button === 2 && e.ctrlKey)) || !picking) return
     e.stopPropagation()
-    if (type === 'furniture' && (e.ctrlKey || e.metaKey)) {
+    if (type === 'furniture' && additive) {
       onSelect({ type, id }, true) // Ctrl+클릭: 끌지 않고 고르기만
       return
     }
@@ -286,10 +289,11 @@ export default function Plan2D(props: Props) {
           className="issue"
           onPointerDown={(e) => {
             e.stopPropagation()
-            onSelect(issue.target)
+            onSelect(issue.target, e.ctrlKey || e.metaKey || e.shiftKey) // Ctrl을 누르고 있으면 여러 개 고르기에 더한다
           }}
+          onPointerEnter={() => setHoverIssue(issue.id)}
+          onPointerLeave={() => setHoverIssue((h) => (h === issue.id ? null : h))}
         >
-          <title>{issue.message}</title>
           <circle cx={issue.x} cy={issue.y} r={fs * 0.55} fill={issue.level === 'error' ? '#dc2626' : issue.level === 'warn' ? '#d97706' : '#64748b'} stroke="#fff" strokeWidth={fs * 0.08} />
           <text x={issue.x} y={issue.y} fontSize={fs * 0.8} fontWeight="700" textAnchor="middle" dominantBaseline="central" style={{ fill: '#fff' }}>
             !
@@ -299,11 +303,23 @@ export default function Plan2D(props: Props) {
 
       {/* 줄자 */}
       {/* 잰 줄자는 지우기 전까지 늘 보인다 (가구를 옮기면서 보게) */}
-      <g pointerEvents="none">
-        {measure.list.map((m) => (
-          <Dimension key={m.id} a={m.a} b={m.b} fs={fs} />
-        ))}
-      </g>
+      {/* 선택 도구일 때는 줄자 선·글자를 눌러 하나만 고를 수 있다 (Delete로 지우기) */}
+      {measure.list.map((m) => (
+        <g
+          key={m.id}
+          className={picking ? 'pick' : undefined}
+          pointerEvents={picking ? 'auto' : 'none'}
+          onPointerDown={(e) => {
+            if (e.button !== 0 || !picking) return
+            e.stopPropagation()
+            onSelect({ type: 'measure', id: m.id })
+          }}
+        >
+          {/* 가는 선은 누르기 어려우니 보이지 않는 굵은 선을 겹친다 */}
+          <line x1={m.a.x} y1={m.a.y} x2={m.b.x} y2={m.b.y} stroke="transparent" strokeWidth={fs * 0.9} />
+          <Dimension a={m.a} b={m.b} fs={fs} selected={isSelected('measure', m.id)} />
+        </g>
+      ))}
       {tool === 'measure' && (
         <g pointerEvents="none">
           {measure.start && aim && <Dimension a={measure.start} b={aim} fs={fs} live />}
@@ -335,14 +351,21 @@ export default function Plan2D(props: Props) {
             </g>
           )
         })}
+      {/* 검사 표시 설명 (맨 위에 그린다) */}
+      {(() => {
+        const issue = issues.find((i) => i.id === hoverIssue)
+        return issue ? <IssueTip issue={issue} fs={fs} /> : null
+      })()}
     </svg>
   )
 }
 
-const MEASURE = '#e11d48' // 줄자 색
+const MEASURE_COLOR = '#e11d48' // 줄자 색
+const MEASURE = MEASURE_COLOR
 
 /** 치수선: 두 점을 잇는 선 + 양 끝 눈금 + 가운데 길이 글자 */
-function Dimension({ a, b, fs, live = false }: { a: P3; b: P3; fs: number; live?: boolean }) {
+function Dimension({ a, b, fs, live = false, selected = false }: { a: P3; b: P3; fs: number; live?: boolean; selected?: boolean }) {
+  const MEASURE = selected ? '#2563eb' : MEASURE_COLOR // 고른 줄자는 파랗게
   const len = distance(a, b)
   const flat = Math.hypot(b.x - a.x, b.y - a.y) // 위에서 본 길이 (높이만 잰 경우 0)
   const ux = flat > 1 ? (b.x - a.x) / flat : 1
@@ -376,6 +399,28 @@ function Dimension({ a, b, fs, live = false }: { a: P3; b: P3; fs: number; live?
           )}
         </g>
       )}
+    </g>
+  )
+}
+
+const LEVEL_NAME = { error: '오류', warn: '주의', info: '참고' }
+
+/** 검사 표시에 마우스를 올리면 뜨는 설명 말풍선 */
+function IssueTip({ issue, fs }: { issue: Issue; fs: number }) {
+  const lines = wrap(`[${LEVEL_NAME[issue.level]}] ${issue.message}`, 18)
+  const size = fs * 0.72
+  const lh = size * 1.35
+  const w = Math.max(...lines.map((l) => l.length)) * size * 0.92 + fs * 0.8
+  const h = lines.length * lh + fs * 0.5
+  const top = issue.y - fs * 0.8 - h // 표시 바로 위에
+  return (
+    <g pointerEvents="none">
+      <rect x={issue.x - w / 2} y={top} width={w} height={h} rx={size * 0.4} fill="#18181b" fillOpacity={0.92} />
+      {lines.map((line, i) => (
+        <text key={i} x={issue.x} y={top + fs * 0.25 + lh * (i + 0.5)} fontSize={size} textAnchor="middle" dominantBaseline="central" style={{ fill: '#fff' }}>
+          {line}
+        </text>
+      ))}
     </g>
   )
 }

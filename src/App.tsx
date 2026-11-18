@@ -21,6 +21,8 @@ import SitePanel from './components/SitePanel'
 import { useSurroundings } from './useSurroundings'
 import { DEFAULT_BODY_HEIGHT, bodySize } from './walk'
 import { distance, type MeasureState, type P3 } from './measure'
+
+const ISSUES_KEY = 'interior-planner:show-issues'
 import Plan2D from './components/Plan2D'
 import Header from './components/Header'
 import Rail, { type Section } from './components/Rail'
@@ -36,7 +38,7 @@ import DrcPanel from './components/DrcPanel'
 import NotesPanel from './components/NotesPanel'
 import RecommendPanel from './components/RecommendPanel'
 import SelectionPanel from './components/SelectionPanel'
-import { GroupCard, NoteCard, WallItemCard, WireCard } from './components/ItemCard'
+import { GroupCard, MeasureCard, NoteCard, WallItemCard, WireCard } from './components/ItemCard'
 import type { ViewRequest } from './components/CameraRig'
 
 const BODY_KEY = 'interior-planner:body-height'
@@ -98,6 +100,27 @@ export default function App() {
   const [layer, setLayer] = useState<LayerView>('all')
   const [tool, setTool] = useState<Tool>('select')
   const [draft, setDraft] = useState<Point[] | null>(null) // 그리고 있는 전선의 점들
+  const [showIssues, setShowIssues] = useState(() => {
+    try {
+      return localStorage.getItem(ISSUES_KEY) !== 'off' // 검사 표시(!)를 화면에 보일지
+    } catch {
+      return true
+    }
+  })
+  // Ctrl(⌘)을 누르고 있는 동안: 오른쪽 선택 카드를 흐리게 해서, 카드 밑의 가구도 Ctrl+클릭으로 고를 수 있게
+  const [modHeld, setModHeld] = useState(false)
+  useEffect(() => {
+    const update = (e: KeyboardEvent) => setModHeld(e.ctrlKey || e.metaKey)
+    const release = () => setModHeld(false)
+    window.addEventListener('keydown', update)
+    window.addEventListener('keyup', update)
+    window.addEventListener('blur', release) // 다른 창으로 가면 뗀 것으로
+    return () => {
+      window.removeEventListener('keydown', update)
+      window.removeEventListener('keyup', update)
+      window.removeEventListener('blur', release)
+    }
+  }, [])
   const [measureStart, setMeasureStart] = useState<P3 | null>(null) // 줄자: 찍어 둔 시작점 (끝점을 기다리는 중)
   const [notesVisible, setNotesVisible] = useState(true)
   const [notesExpanded, setNotesExpanded] = useState(false)
@@ -195,6 +218,7 @@ export default function App() {
   const selectedWallItem = find('wallItem', wallItems)
   const selectedWire = find('wire', wires)
   const selectedNote = find('note', notes)
+  const selectedMeasure = find('measure', project.measures ?? [])
   // 지금 고른 가구들 (Ctrl로 여러 개 골랐으면 전부, 아니면 하나)
   const groupIds = multi.length >= 2 ? multi.filter((id) => furniture.some((f) => f.id === id)) : selectedFurniture ? [selectedFurniture.id] : []
   const multiSelected = groupIds.length >= 2
@@ -218,7 +242,16 @@ export default function App() {
   const walk: WalkState | null = walkView ? { view: walkView, body: bodySize(bodyHeight) } : null
 
   const visible: Visible = { ...layerFlags(layer), notes: notesVisible, expandNotes: notesExpanded }
-  const shownIssues = layer === 'all' ? issues : []
+  const shownIssues = showIssues && layer === 'all' ? issues : []
+  const toggleIssues = () => {
+    const next = !showIssues
+    setShowIssues(next)
+    try {
+      localStorage.setItem(ISSUES_KEY, next ? 'on' : 'off')
+    } catch {
+      // 저장이 안 돼도 이번에는 그대로 쓴다
+    }
+  }
 
   /** 물건을 놓을 방: 선택한 방 → 선택한 것이 있는 방 → 첫 번째 방 */
   const targetRoom = () => {
@@ -692,6 +725,11 @@ export default function App() {
     if (selection.type === 'wallItem') commit({ ...p, wallItems: without(p.wallItems) })
     if (selection.type === 'wire') commit({ ...p, wires: without(p.wires) })
     if (selection.type === 'note') commit({ ...p, notes: without(p.notes) })
+    if (selection.type === 'measure') {
+      const { measures = [], ...rest } = p
+      const left = without(measures)
+      commit(left.length ? { ...rest, measures: left } : rest)
+    }
     setSelection(null)
   }
 
@@ -904,7 +942,7 @@ export default function App() {
               onRetry={surroundings.retry}
             />
           )}
-          {section === 'check' && <DrcPanel issues={issues} onPick={pickIssue} />}
+          {section === 'check' && <DrcPanel issues={issues} visible={showIssues} onVisible={toggleIssues} onPick={pickIssue} />}
           {section === 'notes' && (
             <NotesPanel
               notes={notes}
@@ -924,7 +962,7 @@ export default function App() {
           {section === 'ideas' && <RecommendPanel pyeong={toPyeong(unionArea(rooms.map(roomRect)))} roomCount={rooms.length} />}
         </aside>
 
-        <main className="stage">
+        <main className={`stage ${modHeld ? 'mod-held' : ''}`}>
           <div className="views">
             {mode !== '3d' && (
               <div className="view">
@@ -1023,6 +1061,9 @@ export default function App() {
               layer={layer}
               measuring={tool === 'measure'}
               measureCount={measure.list.length}
+              issuesShown={showIssues}
+              issueCount={issues.length}
+              onToggleIssues={toggleIssues}
               onClearMeasures={() => trimMeasures(0)}
               onView={(view: ViewName) => setViewRequest({ view, nonce: Date.now() })}
               onLayer={setLayer}
@@ -1070,6 +1111,7 @@ export default function App() {
             />
           )}
           {selectedWire && <WireCard wire={selectedWire} onDelete={deleteSelected} onClose={deselect} />}
+          {selectedMeasure && <MeasureCard measure={selectedMeasure} onDelete={deleteSelected} onClose={deselect} />}
           {selectedNote && (
             <NoteCard key={selectedNote.id} note={selectedNote} onChange={(text) => changeNote(selectedNote.id, { text })} onDelete={deleteSelected} onClose={deselect} />
           )}

@@ -1310,7 +1310,8 @@ kbd {
   cursor: grab;
 }
 
-.plan2d .issue {
+.plan2d .issue,
+.plan2d .pick {
   cursor: pointer;
 }
 
@@ -1763,4 +1764,58 @@ kbd {
 .undo-group {
   display: flex;
   gap: 2px;
+}
+
+/* 고를 수 있는 줄자 글자 · 고른 줄자 */
+.measure-label.pickable {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.measure-label.selected {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.2);
+}
+
+/* 검사 표시(!)에 마우스를 올리면 뜨는 설명 */
+.issue-pin {
+  position: relative;
+}
+
+.anchor:hover {
+  z-index: 5;
+}
+
+.issue-tip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgb(24 24 27 / 0.92);
+  box-shadow: var(--shadow);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.45;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.issue-tip b {
+  margin-right: 4px;
+}
+
+.issue-pin:hover .issue-tip {
+  display: block;
+}
+
+/* Ctrl(⌘)을 누르고 있는 동안: 선택 카드를 흐리게 하고 클릭이 통과하게 (카드 밑 가구도 고를 수 있게) */
+.stage.mod-held .inspector {
+  opacity: 0.18;
+  pointer-events: none;
+  transition: opacity 0.12s;
 }

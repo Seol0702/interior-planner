@@ -3,6 +3,7 @@ import type { Note, RoomShape, Side, WallItem, Wire } from '../types'
 import { edgeLength } from '../plan'
 import { KIND_NAME, SIDE_NAME } from '../structures'
 import Icon from '../icons'
+import { distance, fmtLength, lengthParts, type Measurement } from '../measure'
 import NumberField from './NumberField'
 
 /** 속성 카드의 공통 틀: 제목 + 닫기 + 내용 + 삭제 */
@@ -126,7 +127,7 @@ export function GroupCard({ names, onRotate, onDuplicate, onDelete, onClose }: G
       <p className="group-names">
         {[...counts].map(([n, c]) => (c > 1 ? `${n} ×${c}` : n)).join(', ')}
       </p>
-      <p className="hint">Ctrl+클릭으로 더 고르거나 빼고, Ctrl+C · Ctrl+V로 복사해 붙여요.</p>
+      <p className="hint">Ctrl(또는 Shift)+클릭으로 더 고르거나 빼요. Ctrl을 누르고 있으면 이 카드가 흐려져서 밑에 있는 가구도 고를 수 있어요.</p>
       <div className="inspector-actions">
         <button className="btn sm" onClick={onRotate} title="R">
           <Icon name="rotate" size={15} />
@@ -142,5 +143,16 @@ export function GroupCard({ names, onRotate, onDuplicate, onDelete, onClose }: G
         </button>
       </div>
     </section>
+  )
+}
+
+/** 고른 줄자 카드: 길이 + 삭제 */
+export function MeasureCard({ measure, onDelete, onClose }: { measure: Measurement; onDelete: () => void; onClose: () => void }) {
+  const parts = lengthParts(measure.a, measure.b)
+  return (
+    <Card title="줄자" sub={fmtLength(distance(measure.a, measure.b))} onClose={onClose} onDelete={onDelete}>
+      {parts && <p className="group-names">{parts}</p>}
+      <p className="hint">Delete 키로도 지울 수 있어요.</p>
+    </Card>
   )
 }

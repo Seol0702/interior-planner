@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Line } from '@react-three/drei'
 import * as THREE from 'three'
 import type { Project } from '../types'
@@ -13,6 +13,9 @@ type Props = {
   measure: MeasureState
   active: boolean // 줄자 도구를 들고 있나 (아니면 잰 것만 보여 준다)
   labelLayer: RefObject<HTMLDivElement | null> // 길이 글자를 붙일 화면 위 층
+  selectedId: string | null // 고른 줄자
+  pickable: boolean // 선택 도구일 때: 줄자 선·글자를 눌러 고를 수 있다
+  onPick: (id: string) => void
   onMeasure: (p: P3) => void
 }
 
@@ -39,7 +42,9 @@ function measurable(hit: THREE.Object3D) {
  * 3D 화면의 줄자: 바닥·벽·가구 어디든 두 점을 눌러 거리를 잰다.
  * 화면을 끄는 것(시점 이동)과 누르는 것을 구분하려고, 마우스 이벤트를 캔버스에서 직접 받는다.
  */
-export default function Measure3D({ project, pieces, measure, active, labelLayer, onMeasure }: Props) {
+export default function Measure3D({ project, pieces, measure, active, labelLayer, selectedId, pickable, onPick, onMeasure }: Props) {
+  const pickRef = useRef(onPick)
+  pickRef.current = onPick
   const { camera, scene, gl } = useThree()
   const ray = useMemo(() => new THREE.Raycaster(), [])
   const targets = useMemo(() => snapTargets(project, pieces), [project, pieces])
@@ -142,6 +147,7 @@ export default function Measure3D({ project, pieces, measure, active, labelLayer
       [...measure.list, ...(live ? [live] : [])]
         .filter((m) => distance(m.a, m.b) >= 5)
         .map((m) => ({
+          id: m.id,
           live: m.id === 'live',
           pos: new THREE.Vector3(...toVec({ x: (m.a.x + m.b.x) / 2, y: (m.a.y + m.b.y) / 2, z: (m.a.z + m.b.z) / 2 })),
           text: fmtLength(distance(m.a, m.b)),
@@ -156,7 +162,8 @@ export default function Measure3D({ project, pieces, measure, active, labelLayer
     if (!layer) return
     const els = labels.map((l) => {
       const el = document.createElement('div')
-      el.className = `measure-label ${l.live ? 'live' : ''}`
+      el.className = `measure-label ${l.live ? 'live' : ''} ${l.id === selectedId ? 'selected' : ''} ${pickable && !l.live ? 'pickable' : ''}`
+      if (pickable && !l.live) el.addEventListener('click', () => pickRef.current(l.id)) // 글자를 누르면 그 줄자를 고른다
       const b = document.createElement('b')
       b.textContent = l.text
       el.appendChild(b)
@@ -171,7 +178,7 @@ export default function Measure3D({ project, pieces, measure, active, labelLayer
     })
     nodes.current = els
     return () => els.forEach((el) => el.remove())
-  }, [labels, labelLayer])
+  }, [labels, labelLayer, selectedId, pickable])
   const v = useMemo(() => new THREE.Vector3(), [])
   useFrame(({ camera, size }) => {
     labels.forEach((l, i) => {
@@ -186,7 +193,7 @@ export default function Measure3D({ project, pieces, measure, active, labelLayer
   return (
     <group userData={{ noMeasure: true }}>
       {measure.list.map((m) => (
-        <Dimension3D key={m.id} a={m.a} b={m.b} />
+        <Dimension3D key={m.id} a={m.a} b={m.b} selected={m.id === selectedId} onClick={pickable ? () => onPick(m.id) : undefined} />
       ))}
       {active && measure.start && aim && <Dimension3D a={measure.start} b={aim} live />}
       {active && measure.start && !aim && <Dot p={measure.start} />}
@@ -200,22 +207,55 @@ export default function Measure3D({ project, pieces, measure, active, labelLayer
   )
 }
 
-function Dot({ p }: { p: P3 }) {
+function Dot({ p, color = COLOR }: { p: P3; color?: string }) {
   return (
     <mesh position={toVec(p)} renderOrder={20}>
       <sphereGeometry args={[0.028, 14, 10]} />
-      <meshBasicMaterial color={COLOR} depthTest={false} />
+      <meshBasicMaterial color={color} depthTest={false} />
     </mesh>
   )
 }
 
 /** 3D 치수선: 선 + 양 끝 점 (물체에 가려도 보이게 맨 앞에 그린다). 길이 글자는 화면 위 층에 따로 붙인다 */
-function Dimension3D({ a, b, live = false }: { a: P3; b: P3; live?: boolean }) {
+function Dimension3D({ a, b, live = false, selected = false, onClick }: { a: P3; b: P3; live?: boolean; selected?: boolean; onClick?: () => void }) {
+  const color = selected ? '#2563eb' : COLOR // 고른 줄자는 파랗게
+  // 누를 자리: 선을 감싸는 보이지 않는 막대 (가는 선은 누르기 어렵고, 바닥 위 선은 바닥과 겹친다)
+  const hit = useMemo(() => {
+    const from = new THREE.Vector3(...toVec(a))
+    const to = new THREE.Vector3(...toVec(b))
+    const dir = to.clone().sub(from)
+    const length = dir.length()
+    return {
+      length,
+      center: from.clone().add(to).multiplyScalar(0.5),
+      rotation: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), length > 0 ? dir.normalize() : new THREE.Vector3(1, 0, 0)),
+    }
+  }, [a, b])
+  const click = (e: ThreeEvent<MouseEvent>) => {
+    if (!onClick || e.delta > 4) return
+    e.stopPropagation()
+    onClick()
+  }
   return (
     <group>
-      <Line points={[toVec(a), toVec(b)]} color={COLOR} lineWidth={2.5} dashed={live} dashSize={0.08} gapSize={0.05} depthTest={false} renderOrder={19} />
-      <Dot p={a} />
-      <Dot p={b} />
+      {onClick && hit.length > 0 && (
+        <mesh position={hit.center} quaternion={hit.rotation} onClick={click}>
+          <boxGeometry args={[hit.length, 0.09, 0.09]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      )}
+      <Line
+        points={[toVec(a), toVec(b)]}
+        color={color}
+        lineWidth={selected ? 4 : 2.5}
+        dashed={live}
+        dashSize={0.08}
+        gapSize={0.05}
+        depthTest={false}
+        renderOrder={19}
+      />
+      <Dot p={a} color={color} />
+      <Dot p={b} color={color} />
     </group>
   )
 }

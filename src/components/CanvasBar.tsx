@@ -10,6 +10,9 @@ type Props = {
   measureCount: number // 남아 있는 줄자 개수
   onMeasure: () => void
   onClearMeasures: () => void
+  issuesShown: boolean // 검사 표시(!)를 보이는 중인가
+  issueCount: number
+  onToggleIssues: () => void
   onWalk: () => void
 }
 
@@ -30,7 +33,7 @@ export const LAYERS: { id: LayerView; name: string; title: string }[] = [
 ]
 
 /** 화면 아래에 떠 있는 막대: 시점 바로가기 + 보기(레이어) 전환 */
-export default function CanvasBar({ mode, layer, measuring, measureCount, onView, onLayer, onMeasure, onClearMeasures, onWalk }: Props) {
+export default function CanvasBar({ mode, layer, measuring, measureCount, issuesShown, issueCount, onView, onLayer, onMeasure, onClearMeasures, onToggleIssues, onWalk }: Props) {
   return (
     <div className="pill-bar">
       <div className="pill-group" role="group" aria-label="도구">
@@ -42,6 +45,14 @@ export default function CanvasBar({ mode, layer, measuring, measureCount, onView
             <Icon name="close" size={13} /> 줄자 {measureCount}개 지우기
           </button>
         )}
+        <button
+          className={`pill ${issuesShown ? 'on' : ''}`}
+          title={issuesShown ? '배치 검사 표시(!) 숨기기' : '배치 검사 표시(!) 보이기'}
+          aria-pressed={issuesShown}
+          onClick={onToggleIssues}
+        >
+          <Icon name="check" size={15} /> 검사{issueCount > 0 ? ` ${issueCount}` : ''}
+        </button>
       </div>
       {mode !== '2d' && (
         <div className="pill-group" role="group" aria-label="시점">

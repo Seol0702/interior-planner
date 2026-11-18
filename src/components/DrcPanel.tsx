@@ -3,7 +3,9 @@ import type { Issue } from '../drc'
 const LEVEL_NAME = { error: '오류', warn: '주의', info: '참고' }
 
 /** 배치 규칙 검사 결과 목록. 항목을 누르면 문제가 된 것이 선택된다 */
-export default function DrcPanel({ issues, onPick }: { issues: Issue[]; onPick: (issue: Issue) => void }) {
+type Props = { issues: Issue[]; visible: boolean; onVisible: () => void; onPick: (issue: Issue) => void }
+
+export default function DrcPanel({ issues, visible, onVisible, onPick }: Props) {
   const count = (level: Issue['level']) => issues.filter((i) => i.level === level).length
   return (
     <>
@@ -13,6 +15,11 @@ export default function DrcPanel({ issues, onPick }: { issues: Issue[]; onPick: 
           <p className="sub">가구를 옮길 때마다 자동으로 검사해요</p>
         </div>
       </div>
+      <label className="switch">
+        <input type="checkbox" checked={visible} onChange={onVisible} />
+        <span className="track" />
+        화면에 검사 표시(!) 보이기
+      </label>
       <div className="stats">
         {(['error', 'warn', 'info'] as const).map((level) => (
           <div key={level} className={`stat ${level}`}>
