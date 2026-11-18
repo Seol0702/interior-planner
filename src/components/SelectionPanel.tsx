@@ -11,6 +11,7 @@ type Props = {
   item: FurnitureLibraryItem
   thumb?: string
   onRotate: () => void
+  onToggleLock: () => void // 고정 켜기·끄기
   onDuplicate: () => void
   onDelete: () => void
   onClose: () => void
@@ -20,7 +21,8 @@ type Props = {
 }
 
 /** 선택한 가구의 속성 카드 */
-export default function SelectionPanel({ instance, item, thumb, onRotate, onDuplicate, onDelete, onClose, onRecolor, onResize, onToast }: Props) {
+export default function SelectionPanel({ instance, item, thumb, onRotate, onToggleLock, onDuplicate, onDelete, onClose, onRecolor, onResize, onToast }: Props) {
+  const locked = !!instance.locked
   const resized = instance.width !== undefined || instance.depth !== undefined || instance.height !== undefined || instance.base !== undefined
   const base = findLibraryItem(instance.libraryId)
   const fileInput = useRef<HTMLInputElement>(null)
@@ -108,7 +110,11 @@ export default function SelectionPanel({ instance, item, thumb, onRotate, onDupl
       <input ref={fileInput} type="file" accept="image/*" hidden onChange={pickImage} />
 
       <div className="inspector-actions">
-        <button className="btn sm" onClick={onRotate} title="R">
+        <button className={`btn sm ${locked ? 'lock-on' : ''}`} onClick={onToggleLock} title="L" aria-pressed={locked}>
+          <Icon name={locked ? 'lock' : 'unlock'} size={15} />
+          {locked ? '고정됨' : '고정'}
+        </button>
+        <button className="btn sm" onClick={onRotate} title="R" disabled={locked}>
           <Icon name="rotate" size={15} />
           회전
         </button>
@@ -116,7 +122,7 @@ export default function SelectionPanel({ instance, item, thumb, onRotate, onDupl
           <Icon name="copy" size={15} />
           복제
         </button>
-        <button className="btn danger sm" onClick={onDelete} title="Delete">
+        <button className="btn danger sm" onClick={onDelete} title="Delete" disabled={locked}>
           <Icon name="trash" size={15} />
           삭제
         </button>

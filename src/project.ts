@@ -51,6 +51,7 @@ function parseFurniture(list: unknown): FurnitureInstance[] {
       if (isNum(v) && v >= 10 && v <= 10000) inst[key] = Math.round(v)
     }
     if (isNum(f.base) && f.base >= 0 && f.base <= 5000) inst.base = Math.round(f.base) // 바닥에서 띄운 높이
+    if (f.locked === true) inst.locked = true // 고정
     result.push(inst)
   }
   return result

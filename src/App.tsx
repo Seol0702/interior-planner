@@ -394,6 +394,41 @@ export default function App() {
 
   // ───────── 가구 ─────────
 
+  // ───────── 고정 ─────────
+
+  /** 고정된 가구가 끼어 있나 */
+  const anyLocked = (ids: string[]) => latest.current.furniture.some((f) => ids.includes(f.id) && f.locked)
+  const lockToastAt = useRef(0)
+  /** "고정된 가구예요" 알림 (끄는 동안 계속 뜨지 않게 2초에 한 번만) */
+  const warnLocked = () => {
+    if (Date.now() - lockToastAt.current < 2000) return
+    lockToastAt.current = Date.now()
+    showToast('고정된 가구예요. 고정을 풀면 옮기거나 바꿀 수 있어요 (L 키)', true)
+  }
+
+  /** 고른 가구(들) 고정 켜기·끄기: 모두 고정돼 있으면 풀고, 아니면 모두 고정 */
+  const toggleLock = () => {
+    const ids = groupIds
+    if (ids.length === 0) return
+    const p = latest.current
+    const lock = !p.furniture.filter((f) => ids.includes(f.id)).every((f) => f.locked)
+    commit({
+      ...p,
+      furniture: p.furniture.map((f) => {
+        if (!ids.includes(f.id)) return f
+        const { locked: _old, ...rest } = f // eslint-disable-line @typescript-eslint/no-unused-vars
+        return lock ? { ...rest, locked: true } : rest
+      }),
+    })
+    showToast(lock ? `가구 ${ids.length}개를 고정했어요` : `가구 ${ids.length}개의 고정을 풀었어요`)
+  }
+
+  /** 복사본은 고정을 풀어서 만든다 */
+  const unlocked = (f: FurnitureInstance): FurnitureInstance => {
+    const { locked: _old, ...rest } = f // eslint-disable-line @typescript-eslint/no-unused-vars
+    return rest
+  }
+
   /** 책상 위에 두는 물건이면, 밑에 있는 가구 윗면 높이에 올려 앉힌다 (밑에 아무것도 없으면 바닥) */
   const seat = (f: FurnitureInstance, p: Project): FurnitureInstance => {
     const item = resolveItem(f)
@@ -455,6 +490,7 @@ export default function App() {
     const { w, d } = footprint(item, f.rotation)
     // 함께 고른 무리 중 하나를 끌면 무리째, 아니면 그 가구 + 위에 올라앉은 물건(책상 위 컴퓨터 등)
     const members = multi.length >= 2 && multi.includes(id) ? multi : [id, ...ridersOf(p, id)]
+    if (anyLocked(members)) return warnLocked() // 고정된 가구는 움직이지 않는다
     const others = p.furniture.filter((o) => !members.includes(o.id)).map(boxOf).filter((b): b is Box => b !== null)
     const snapped = smartSnap({ x: wantX, y: wantY, w, d }, others, p.rooms.map(roomRect), p.measures ?? []) // 줄자 선·끝에도 붙는다
     const target = { ...f, x: snapped.x ?? snap(wantX), y: snapped.y ?? snap(wantY) }
@@ -488,6 +524,10 @@ export default function App() {
    */
   const shiftGroup = (ids: string[], dx: number, dy: number) => {
     const p = latest.current
+    if (anyLocked(ids)) {
+      warnLocked()
+      return { dx: 0, dy: 0 }
+    }
     // 원하는 만큼(want) 중 실제로 갈 수 있는 만큼(got): 방향이 반대로 밀리면 0
     const limit = (want: number, got: number) => (want === 0 || Math.sign(got) !== Math.sign(want) ? 0 : Math.abs(got) < Math.abs(want) ? got : want)
     let ex = dx
@@ -515,6 +555,7 @@ export default function App() {
   /** 고른 가구 무리를 가운데를 축으로 90° 돌린다 (가구끼리의 배치는 그대로) */
   const rotateGroup = () => {
     const p = latest.current
+    if (anyLocked(groupIds)) return warnLocked()
     const members = p.furniture.filter((f) => groupIds.includes(f.id))
     const xs = members.map((f) => f.x)
     const ys = members.map((f) => f.y)
@@ -537,7 +578,7 @@ export default function App() {
     const p = latest.current
     const copies = items.flatMap((f) => {
       const item = resolveItem(f)
-      return item ? [placeInPlan({ ...f, id: newId(), x: f.x + offset, y: f.y + offset }, item, p.rooms)] : []
+      return item ? [placeInPlan({ ...unlocked(f), id: newId(), x: f.x + offset, y: f.y + offset }, item, p.rooms)] : []
     }).map((c) => seat(c, { ...p, furniture: [...p.furniture] }))
     if (copies.length === 0) return
     commit({ ...p, furniture: [...p.furniture, ...copies] })
@@ -577,6 +618,7 @@ export default function App() {
   }
 
   const rotateSelected = () => {
+    if (anyLocked(groupIds)) return warnLocked()
     if (multiSelected) rotateGroup()
     else if (selectedFurniture) changeFurniture(selectedFurniture.id, (f) => ({ ...f, rotation: (f.rotation + 90) % 360 }))
   }
@@ -585,7 +627,7 @@ export default function App() {
     if (!selectedFurniture || !selectedItem) return
     const p = latest.current
     const copy = placeInPlan(
-      { ...selectedFurniture, id: newId(), x: selectedFurniture.x + 300, y: selectedFurniture.y + 300 },
+      { ...unlocked(selectedFurniture), id: newId(), x: selectedFurniture.x + 300, y: selectedFurniture.y + 300 },
       selectedItem,
       p.rooms,
     )
@@ -607,6 +649,7 @@ export default function App() {
   /** 크기 바꾸기. 원래 크기와 같아지면 저장하지 않는다 (null이면 원래 크기로) */
   const resizeSelected = (size: { width?: number; depth?: number; height?: number; base?: number } | null) => {
     if (!selectedFurniture) return
+    if (selectedFurniture.locked) return warnLocked()
     const base = findLibraryItem(selectedFurniture.libraryId)
     if (!base) return
     changeFurniture(selectedFurniture.id, (f) => {
@@ -758,10 +801,14 @@ export default function App() {
     if (!selection || selection.type === 'room') return
     const p = latest.current
     if (multiSelected) {
-      commit({ ...p, furniture: p.furniture.filter((f) => !groupIds.includes(f.id)) })
+      // 고정된 가구는 남기고 나머지만 지운다
+      const kept = p.furniture.filter((f) => groupIds.includes(f.id) && f.locked).length
+      commit({ ...p, furniture: p.furniture.filter((f) => !groupIds.includes(f.id) || f.locked) })
+      if (kept) showToast(`고정된 가구 ${kept}개는 지우지 않고 남겼어요`, true)
       setSelection(null)
       return
     }
+    if (selection.type === 'furniture' && anyLocked([selection.id])) return warnLocked()
     const without = <T extends { id: string }>(list: T[]) => list.filter((o) => o.id !== selection.id)
     if (selection.type === 'furniture') commit({ ...p, furniture: without(p.furniture) })
     if (selection.type === 'wallItem') commit({ ...p, wallItems: without(p.wallItems) })
@@ -874,6 +921,7 @@ export default function App() {
       // e.code는 한/영 입력 상태와 상관없이 "자판 위치"로 판단 (한글 모드에서 R = ㄱ)
       switch (e.code) {
         case 'KeyR': rotateSelected(); break
+        case 'KeyL': toggleLock(); break // 고정 켜기·끄기
         case 'KeyV': {
           // 보기 전환: 전체 → 가구 → 전기 → 구조 → 전체 …
           const i = LAYERS.findIndex((l) => l.id === layer)
@@ -1123,6 +1171,8 @@ export default function App() {
                 const f = furniture.find((o) => o.id === id)
                 return (f && resolveItem(f)?.name) ?? '가구'
               })}
+              locked={furniture.filter((f) => groupIds.includes(f.id)).every((f) => f.locked)}
+              onToggleLock={toggleLock}
               onRotate={rotateGroup}
               onDuplicate={() => pasteFurniture(furniture.filter((f) => groupIds.includes(f.id)), 300)}
               onDelete={deleteSelected}
@@ -1135,6 +1185,7 @@ export default function App() {
               instance={selectedFurniture}
               item={selectedItem}
               thumb={thumbs[selectedItem.id]}
+              onToggleLock={toggleLock}
               onRotate={rotateSelected}
               onDuplicate={duplicateSelected}
               onDelete={deleteSelected}

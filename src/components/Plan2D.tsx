@@ -276,6 +276,23 @@ export default function Plan2D(props: Props) {
         )
       })}
 
+      {/* 고정된 가구: 오른쪽 위 모서리에 자물쇠 표시 */}
+      {furniture.map((f) => {
+        const item = f.locked ? resolveItem(f) : undefined
+        if (!item || !(item.layer === 'electric' ? visible.electric : visible.furniture)) return null
+        const fp = footprint(item, f.rotation)
+        const r = Math.min(fs * 0.5, fp.w * 0.3, fp.d * 0.3)
+        const cx = f.x + fp.w / 2 - r * 1.2
+        const cy = f.y - fp.d / 2 + r * 1.2
+        return (
+          <g key={`lock-${f.id}`} pointerEvents="none">
+            <circle cx={cx} cy={cy} r={r} fill="#f59e0b" stroke="#fff" strokeWidth={r * 0.15} />
+            <rect x={cx - r * 0.42} y={cy - r * 0.05} width={r * 0.84} height={r * 0.6} rx={r * 0.08} fill="#fff" />
+            <path d={`M ${cx - r * 0.26} ${cy - r * 0.05} v ${-r * 0.2} a ${r * 0.26} ${r * 0.26} 0 0 1 ${r * 0.52} 0 v ${r * 0.2}`} fill="none" stroke="#fff" strokeWidth={r * 0.14} />
+          </g>
+        )
+      })}
+
       {/* 문·창문·콘센트 */}
       {wallItems.map((item) => {
         if (!(item.kind === 'outlet' ? visible.electric : visible.walls)) return null

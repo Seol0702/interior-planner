@@ -131,7 +131,7 @@ export default function Scene3D(props: Props) {
   const pickedItem = picked && resolveItem(picked)
   if (picked && pickedItem && !walking) {
     const top = bottomOf(pickedItem, project.wallHeight) + pickedItem.height
-    anchors.push({ id: 'tag', pos: [mm(picked.x), mm(top) + 0.25, mm(picked.y)], node: <div className="tag">{pickedItem.name}</div> })
+    anchors.push({ id: 'tag', pos: [mm(picked.x), mm(top) + 0.25, mm(picked.y)], node: <div className="tag">{picked.locked ? '🔒 ' : ''}{pickedItem.name}</div> })
   }
 
   return (

@@ -161,6 +161,7 @@ export type FurnitureInstance = {
   depth?: number
   height?: number
   base?: number // 바닥에서 띄운 높이를 바꿨을 때만 저장 (mm)
+  locked?: boolean // 고정: 옮기기·돌리기·크기 바꾸기·지우기를 막는다
 }
 
 /** 저장 파일(JSON) 한 개에 들어가는 전체 내용 */

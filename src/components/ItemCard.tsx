@@ -121,6 +121,8 @@ export function NoteCard({ note, onChange, onDelete, onClose }: { note: Note; on
 
 type GroupProps = {
   names: string[] // 고른 가구 이름들
+  locked: boolean // 모두 고정돼 있나
+  onToggleLock: () => void
   onRotate: () => void
   onDuplicate: () => void
   onDelete: () => void
@@ -128,7 +130,7 @@ type GroupProps = {
 }
 
 /** Ctrl로 여러 개 고른 가구 카드: 한꺼번에 회전·복제·삭제 */
-export function GroupCard({ names, onRotate, onDuplicate, onDelete, onClose }: GroupProps) {
+export function GroupCard({ names, locked, onToggleLock, onRotate, onDuplicate, onDelete, onClose }: GroupProps) {
   // 같은 이름은 묶어서 "의자 ×4"처럼
   const counts = new Map<string, number>()
   for (const n of names) counts.set(n, (counts.get(n) ?? 0) + 1)
@@ -148,7 +150,11 @@ export function GroupCard({ names, onRotate, onDuplicate, onDelete, onClose }: G
       </p>
       <p className="hint">Ctrl+왼쪽 클릭으로 더 고르거나 빼요 (맥은 ⌘도 돼요). Ctrl을 누르고 있으면 이 카드가 흐려져서 밑에 있는 가구도 고를 수 있어요.</p>
       <div className="inspector-actions">
-        <button className="btn sm" onClick={onRotate} title="R">
+        <button className={`btn sm ${locked ? 'lock-on' : ''}`} onClick={onToggleLock} title="L" aria-pressed={locked}>
+          <Icon name={locked ? 'lock' : 'unlock'} size={15} />
+          {locked ? '고정됨' : '고정'}
+        </button>
+        <button className="btn sm" onClick={onRotate} title="R" disabled={locked}>
           <Icon name="rotate" size={15} />
           회전
         </button>
@@ -156,7 +162,7 @@ export function GroupCard({ names, onRotate, onDuplicate, onDelete, onClose }: G
           <Icon name="copy" size={15} />
           복제
         </button>
-        <button className="btn danger sm" onClick={onDelete} title="Delete">
+        <button className="btn danger sm" onClick={onDelete} title="Delete" disabled={locked}>
           <Icon name="trash" size={15} />
           삭제
         </button>

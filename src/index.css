@@ -1193,15 +1193,16 @@ kbd {
 }
 
 .inspector-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)); /* 단추가 많아도 두 줄로 */
   gap: 6px;
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
 
 .inspector-actions .btn {
-  flex: 1;
   justify-content: center;
+  white-space: nowrap;
 }
 
 /* 위쪽 안내 띠와 아래쪽 알림 */
@@ -1835,4 +1836,11 @@ kbd {
 .stage.mod-held .anchor > *,
 .stage.mod-held .measure-label.pickable {
   pointer-events: none;
+}
+
+/* 고정된 가구의 고정 단추 */
+.btn.lock-on {
+  border-color: #f59e0b;
+  background: #fef3c7;
+  color: #92400e;
 }

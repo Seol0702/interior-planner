@@ -82,6 +82,8 @@ const PATHS = {
   ruler: <path d="M3 15.5 15.5 3 21 8.5 8.5 21z M7 11.5l2 2 M9.5 9l1.5 1.5 M12 6.5l2 2 M14.5 4l1.5 1.5" />,
   undo: <path d="M9 14 4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 0 11H11" />,
   redo: <path d="M15 14l5-5-5-5 M20 9H9.5a5.5 5.5 0 0 0 0 11H13" />,
+  lock: <path d="M6 11h12v10H6z M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11 M12 15v2" />,
+  unlock: <path d="M6 11h12v10H6z M8.5 11V7.5a3.5 3.5 0 0 1 6.8-1.2 M12 15v2" />,
   exit: <path d="M14 4h5v16h-5 M10 8l-4 4 4 4 M6 12h10" />,
 } satisfies Record<string, ReactNode>
 
