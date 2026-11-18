@@ -396,7 +396,7 @@ export default function App() {
     const { w, d } = footprint(item, f.rotation)
     const members = multi.length >= 2 && multi.includes(id) ? multi : [id] // 함께 고른 무리 중 하나를 끌면 무리째
     const others = p.furniture.filter((o) => !members.includes(o.id)).map(boxOf).filter((b): b is Box => b !== null)
-    const snapped = smartSnap({ x: wantX, y: wantY, w, d }, others, p.rooms.map(roomRect))
+    const snapped = smartSnap({ x: wantX, y: wantY, w, d }, others, p.rooms.map(roomRect), p.measures ?? []) // 줄자 선·끝에도 붙는다
     const target = { ...f, x: snapped.x ?? snap(wantX), y: snapped.y ?? snap(wantY) }
     if (members.length >= 2) {
       const moved = shiftGroup(members, target.x - f.x, target.y - f.y)

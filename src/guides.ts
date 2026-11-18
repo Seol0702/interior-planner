@@ -1,6 +1,10 @@
 // 스마트 가이드: 파워포인트처럼 가구를 끌 때 다른 가구와
 // 줄이 맞거나(왼쪽·가운데·오른쪽) 간격이 같아지는 자리에 "착" 붙여 주고 안내선을 띄운다.
 import type { Rect } from './plan'
+import type { Point } from './types'
+
+/** 줄자 하나를 위에서 본 모습: 시작점 a → 끝점 b */
+export type Mark = { a: Point; b: Point }
 
 /** 중심 + 크기로 나타낸 가구 자리 */
 export type Box = { x: number; y: number; w: number; d: number }
@@ -21,13 +25,13 @@ const along = (b: Box, axis: 'x' | 'y'): Span =>
 
 type Candidate = { delta: number; guides: Guide[] }
 
-function snapAxis(axis: 'x' | 'y', moving: Box, others: Box[], rooms: Rect[], threshold: number): Candidate | null {
+function snapAxis(axis: 'x' | 'y', moving: Box, others: Box[], rooms: Rect[], marks: Mark[], threshold: number): Candidate | null {
   const m = along(moving, axis)
   const size = m.hi - m.lo
   const pmid = (m.plo + m.phi) / 2
   const cands: Candidate[] = []
-  const add = (delta: number, guides: Guide[]) => {
-    if (Math.abs(delta) <= threshold) cands.push({ delta, guides })
+  const add = (delta: number, guides: Guide[], reach = threshold) => {
+    if (Math.abs(delta) <= reach) cands.push({ delta, guides })
   }
 
   // 1) 다른 가구와 줄 맞추기 (왼쪽·가운데·오른쪽 끼리)
@@ -68,6 +72,30 @@ function snapAxis(axis: 'x' | 'y', moving: Box, others: Box[], rooms: Rect[], th
     add(a.lo - gap - m.hi, [gapGuide(a.lo - gap, a.lo), gapGuide(a.hi, b.lo)])
   }
 
+  // 4) 줄자: 가구가 줄자 선이나 끝점 근처에 오면 가장자리·가운데를 거기에 맞춘다 (조금 더 멀리서도 붙는다)
+  const NEAR = 300 // 반대 축으로 이만큼 안에 있어야 "근처"
+  const reach = threshold * 1.5
+  for (const { a, b } of marks) {
+    const [pa, pb] = axis === 'x' ? [a.x, b.x] : [a.y, b.y] // 이 축 좌표
+    const [qa, qb] = axis === 'x' ? [a.y, b.y] : [a.x, b.x] // 반대 축 좌표
+    // 끝점: 가구 가장자리가 줄자 끝에 딱 닿게
+    for (const [p, q] of [[pa, qa], [pb, qb]]) {
+      if (q < m.plo - NEAR || q > m.phi + NEAR) continue
+      for (const mine of [m.lo, m.mid, m.hi]) {
+        add(p - mine, [{ kind: 'line', axis, at: p, from: Math.min(m.plo, q), to: Math.max(m.phi, q) }], reach)
+      }
+    }
+    // 선: 이 축에 수직으로 놓인 줄자(예: axis가 y면 가로 줄자)에 가구 가장자리를 붙인다
+    if (Math.abs(pa - pb) < 1) {
+      const lo = Math.min(qa, qb)
+      const hi = Math.max(qa, qb)
+      if (m.phi < lo - NEAR || m.plo > hi + NEAR) continue
+      for (const mine of [m.lo, m.mid, m.hi]) {
+        add(pa - mine, [{ kind: 'line', axis, at: pa, from: Math.min(lo, m.plo), to: Math.max(hi, m.phi) }], reach)
+      }
+    }
+  }
+
   if (cands.length === 0) return null
   const best = cands.reduce((p, c) => (Math.abs(c.delta) < Math.abs(p.delta) ? c : p))
   // 같은 자리로 붙는 안내선은 전부 함께 보여 준다
@@ -83,10 +111,10 @@ function snapAxis(axis: 'x' | 'y', moving: Box, others: Box[], rooms: Rect[], th
   return { delta: best.delta, guides }
 }
 
-/** 끌고 있는 가구(moving)를 가까운 정렬 자리에 붙인다. 붙지 않은 축은 null */
-export function smartSnap(moving: Box, others: Box[], rooms: Rect[], threshold = 60) {
-  const sx = snapAxis('x', moving, others, rooms, threshold)
-  const sy = snapAxis('y', moving, others, rooms, threshold)
+/** 끌고 있는 가구(moving)를 가까운 정렬 자리(다른 가구·방 가운데·줄자)에 붙인다. 붙지 않은 축은 null */
+export function smartSnap(moving: Box, others: Box[], rooms: Rect[], marks: Mark[] = [], threshold = 60) {
+  const sx = snapAxis('x', moving, others, rooms, marks, threshold)
+  const sy = snapAxis('y', moving, others, rooms, marks, threshold)
   return {
     x: sx ? moving.x + sx.delta : null,
     y: sy ? moving.y + sy.delta : null,
