@@ -225,6 +225,39 @@ const builders: Record<ShapeId, Builder> = {
     ]
   },
 
+  // 문 없는 오픈 캐비닛·철제 책장: 옆판·윗판·뒤판으로 막고 앞은 뚫린 선반장. 넓으면 가운데 칸막이
+  openCabinet: (W, D, H) => {
+    const t = Math.min(25, W * 0.03) // 판 두께
+    const base = Math.min(70, H * 0.08) // 맨 아래 받침 높이
+    const n = Math.max(1, Math.round((H - base) / 360) - 1) // 중간 선반 개수
+    const cols = W > 1100 ? 2 : 1
+    const inner = W - 2 * t
+    const parts: Part[] = [
+      ...[-1, 1].map((s) => box('main', s * (W / 2 - t / 2), H / 2, 0, t, H, D)), // 옆판
+      box('main', 0, H - t / 2, 0, W, t, D), // 윗판
+      box('dark', 0, base / 2, 0, inner, base, D - 30), // 받침
+      box('main', 0, base + t / 2, 0, inner, t, D), // 바닥판
+      box('accent', 0, H / 2, -D / 2 + 6, inner, H - t, 12), // 뒤판 (안쪽 색)
+    ]
+    const step = (H - t - base - t) / (n + 1)
+    for (let i = 1; i <= n; i++) parts.push(box('main', 0, base + t + step * i, 6, inner, t, D - 12)) // 선반
+    if (cols === 2) parts.push(box('main', 0, (H + base) / 2, 6, t, H - base - t, D - 12)) // 가운데 칸막이
+    return parts
+  },
+
+  // 철제 앵글 선반: 네 모서리 기둥 + 선반 판 (옆·뒤가 뚫려 있다)
+  steelShelf: (W, D, H) => {
+    const post = Math.min(40, W * 0.05) // 기둥 굵기
+    const n = Math.max(3, Math.round(H / 420)) // 선반 단 수
+    const parts: Part[] = [-1, 1].flatMap((sx) => [-1, 1].map((sz) => box('main', sx * (W / 2 - post / 2), H / 2, sz * (D / 2 - post / 2), post, H, post)))
+    for (let i = 0; i < n; i++) {
+      const y = 90 + ((H - 110) * i) / (n - 1) // 맨 아래(바닥 가까이)부터 맨 위까지 고르게
+      parts.push(box('accent', 0, y, 0, W - 4, 18, D - 4)) // 선반 판
+      parts.push(box('main', 0, y - 20, D / 2 - post / 2, W - 2 * post, 30, 6)) // 앞쪽 테두리 (앵글)
+    }
+    return parts
+  },
+
   // 판다리 유리 책상: 양옆이 통판 다리, 위는 색유리 상판, 다리 사이에 가림판
   panelDesk: (W, D, H) => {
     const g = 12 // 유리 두께

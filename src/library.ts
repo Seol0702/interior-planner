@@ -199,6 +199,12 @@ export const LIBRARY: FurnitureLibraryItem[] = [
   item('steel-cabinet', '철제 캐비닛 (양문형)', '수납', 'wardrobe', 900, 450, 1800, '#c9ccd0', '#d6d9dd'),
   item('file-cabinet-tall', '서랍형 서류 캐비닛', '수납', 'drawers', 470, 620, 1330, '#c9ccd0', '#d6d9dd'),
   item('wood-cabinet', '원목 캐비닛', '수납', 'wardrobe', 1000, 420, 1200, '#9b7653', '#b48d68'),
+  // 문 없는 선반장
+  item('steel-bookshelf', '철제 책장 (문 없음)', '수납', 'openCabinet', 900, 400, 1800, '#c9ccd0', '#b7bbc1'),
+  item('steel-open-cabinet-low', '오픈 철제 캐비닛 (낮은형)', '수납', 'openCabinet', 900, 400, 900, '#c9ccd0', '#b7bbc1'),
+  item('steel-open-cabinet-wide', '오픈 철제 캐비닛 (와이드)', '수납', 'openCabinet', 1200, 450, 1800, '#3f4349', '#2f3237'),
+  item('wood-open-cabinet', '원목 오픈 수납장', '수납', 'openCabinet', 800, 350, 1200, '#b08e68', '#c9ad8a'),
+  item('steel-angle-shelf', '철제 앵글 선반', '수납', 'steelShelf', 900, 450, 1800, '#8d939b', '#c3c7cc'),
   item('open-shelf', '오픈 선반', '수납', 'bookshelf', 900, 350, 1200, '#3f3f46', '#3f3f46'),
   item('shoe-cabinet-tall', '키큰 신발장', '수납', 'wardrobe', 900, 380, 2000, '#efe9df', '#f7f3ec'),
   item('shoe-rack', '신발 선반', '수납', 'cubeShelf', 800, 300, 800, '#c9a67a', '#a58a6d'),
