@@ -17,6 +17,8 @@ import CameraRig, { type ViewRequest } from './CameraRig'
 import Compass from './Compass'
 import WalkControls, { type WalkAction, type WalkView } from './WalkControls'
 import Surroundings, { type Ground } from './Surroundings'
+import Measure3D from './Measure3D'
+import type { MeasureState, P3 } from '../measure'
 import { buildObstacles } from '../walk'
 import { STOREY, type Building } from '../site'
 
@@ -37,6 +39,8 @@ type Props = {
   visible: Visible
   tool: Tool
   draft: Point[] | null // 그리고 있는 전선
+  measure: MeasureState // 줄자로 잰 것들
+  onMeasure: (p: P3) => void
   lighting: Lighting
   sun: Sun
   patches: SunPatch[] // 창문으로 햇빛이 드는 자리
@@ -216,6 +220,7 @@ export default function Scene3D(props: Props) {
         maxDistance={outside ? 400 : 120}
       />
       )}
+      {tool === 'measure' && !walking && <Measure3D project={project} pieces={pieces} measure={props.measure} onMeasure={props.onMeasure} />}
       <CameraRig request={viewRequest} rooms={project.rooms} />
     </Canvas>
 

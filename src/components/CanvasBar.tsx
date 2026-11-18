@@ -6,6 +6,8 @@ type Props = {
   layer: LayerView
   onView: (view: ViewName) => void
   onLayer: (layer: LayerView) => void
+  measuring: boolean // 줄자 도구를 들고 있나
+  onMeasure: () => void
   onWalk: () => void
 }
 
@@ -26,9 +28,14 @@ export const LAYERS: { id: LayerView; name: string; title: string }[] = [
 ]
 
 /** 화면 아래에 떠 있는 막대: 시점 바로가기 + 보기(레이어) 전환 */
-export default function CanvasBar({ mode, layer, onView, onLayer, onWalk }: Props) {
+export default function CanvasBar({ mode, layer, measuring, onView, onLayer, onMeasure, onWalk }: Props) {
   return (
     <div className="pill-bar">
+      <div className="pill-group" role="group" aria-label="도구">
+        <button className={`pill ${measuring ? 'on' : ''}`} title="두 점 사이의 거리 재기" onClick={onMeasure}>
+          <Icon name="ruler" size={15} /> 줄자 <kbd>M</kbd>
+        </button>
+      </div>
       {mode !== '2d' && (
         <div className="pill-group" role="group" aria-label="시점">
           <span className="pill-label">시점</span>

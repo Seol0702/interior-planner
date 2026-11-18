@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { Point, Project, Selection, Tool, WallItem } from '../types'
 import type { Guide } from '../guides'
 import type { Issue } from '../drc'
@@ -7,6 +7,7 @@ import type { Visible } from './Scene3D'
 import { WALL_THICKNESS, bounds, findPiece, footprint, wallItemSpan, type WallPiece } from '../plan'
 import { resolveItem } from '../library'
 import { fmtM, toPyeong } from '../units'
+import { distance, fmtLength, lengthParts, lockAxis, snapPlan, snapTargets, type MeasureState, type P3 } from '../measure'
 
 type DragType = 'room' | 'furniture' | 'wallItem' | 'note'
 
@@ -20,6 +21,8 @@ type Props = {
   visible: Visible
   tool: Tool
   draft: Point[] | null // 그리고 있는 전선
+  measure: MeasureState // 줄자로 잰 것들
+  onMeasure: (p: P3) => void // 줄자 도구로 점을 찍었을 때
   onSelect: (selection: Selection) => void
   onPlanClick: (x: number, y: number) => void // 도구(전선·메모)를 든 채로 평면을 눌렀을 때
   onFinishWire: () => void
@@ -32,14 +35,16 @@ const ROUND = ['roundTable', 'stool', 'lamp', 'plant', 'ceilingLight', 'pendant'
 
 /** 위에서 내려다본 2D 평면도. 방·가구·문·창문·메모를 끌어서 옮길 수 있다 */
 export default function Plan2D(props: Props) {
-  const { project, pieces, selection, guides, issues, patches, visible, tool, draft } = props
-  const { onSelect, onPlanClick, onFinishWire, onMove, onDragEnd } = props
+  const { project, pieces, selection, guides, issues, patches, visible, tool, draft, measure } = props
+  const { onSelect, onPlanClick, onFinishWire, onMove, onDragEnd, onMeasure } = props
   const { rooms, furniture, wallItems, wires, notes } = project
   const svgRef = useRef<SVGSVGElement>(null)
   const drag = useRef<{ type: DragType; id: string; dx: number; dy: number } | null>(null)
   // 끄는 동안에는 화면 범위를 고정한다 (안 그러면 방을 옮길 때 화면이 같이 출렁임)
   const [frozen, setFrozen] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
   const [cursor, setCursor] = useState<Point | null>(null) // 전선 미리보기용 마우스 위치
+  const [aim, setAim] = useState<P3 | null>(null) // 줄자 끝이 지금 붙을 자리
+  const targets = useMemo(() => (tool === 'measure' ? snapTargets(project, pieces) : null), [tool, project, pieces])
 
   const b = bounds(rooms)
   const view = frozen ?? { x: b.minX - MARGIN, y: b.minY - MARGIN, w: b.w + 2 * MARGIN, h: b.d + 2 * MARGIN }
@@ -65,9 +70,18 @@ export default function Plan2D(props: Props) {
     setFrozen(view)
   }
 
+  /** 줄자: 마우스 자리를 벽·가구 모서리에 붙이고, Shift면 똑바로 */
+  const measurePoint = (e: React.PointerEvent): P3 => {
+    const p = toPlan(e)
+    const s = targets ? snapPlan(targets, p, fs * 0.7) : p
+    const q = { x: s.x, y: s.y, z: 0 }
+    return e.shiftKey && measure.start ? lockAxis(measure.start, q) : q
+  }
+
   const move = (e: React.PointerEvent) => {
     const p = toPlan(e)
     if (tool === 'wire') setCursor(p)
+    if (tool === 'measure') setAim(measurePoint(e))
     const d = drag.current
     if (d) onMove(d.type, d.id, p.x + d.dx, p.y + d.dy)
   }
@@ -83,6 +97,7 @@ export default function Plan2D(props: Props) {
   const background = (e: React.PointerEvent) => {
     if (e.button !== 0) return
     if (picking) onSelect(null)
+    else if (tool === 'measure') onMeasure(measurePoint(e))
     else {
       const p = toPlan(e)
       onPlanClick(p.x, p.y)
@@ -98,6 +113,7 @@ export default function Plan2D(props: Props) {
       onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={end}
+      onPointerLeave={() => setAim(null)}
       onDoubleClick={() => tool === 'wire' && onFinishWire()}
     >
       <defs>
@@ -273,6 +289,18 @@ export default function Plan2D(props: Props) {
         </g>
       ))}
 
+      {/* 줄자 */}
+      {tool === 'measure' && (
+        <g pointerEvents="none">
+          {measure.list.map((m) => (
+            <Dimension key={m.id} a={m.a} b={m.b} fs={fs} />
+          ))}
+          {measure.start && aim && <Dimension a={measure.start} b={aim} fs={fs} live />}
+          {measure.start && !aim && <circle cx={measure.start.x} cy={measure.start.y} r={fs * 0.22} fill={MEASURE} />}
+          {aim && <circle cx={aim.x} cy={aim.y} r={fs * 0.3} fill="none" stroke={MEASURE} strokeWidth={fs * 0.08} />}
+        </g>
+      )}
+
       {/* 메모 */}
       {visible.notes &&
         notes.map((note) => {
@@ -297,6 +325,47 @@ export default function Plan2D(props: Props) {
           )
         })}
     </svg>
+  )
+}
+
+const MEASURE = '#e11d48' // 줄자 색
+
+/** 치수선: 두 점을 잇는 선 + 양 끝 눈금 + 가운데 길이 글자 */
+function Dimension({ a, b, fs, live = false }: { a: P3; b: P3; fs: number; live?: boolean }) {
+  const len = distance(a, b)
+  const flat = Math.hypot(b.x - a.x, b.y - a.y) // 위에서 본 길이 (높이만 잰 경우 0)
+  const ux = flat > 1 ? (b.x - a.x) / flat : 1
+  const uy = flat > 1 ? (b.y - a.y) / flat : 0
+  const t = fs * 0.35 // 눈금 길이의 절반
+  const tick = (p: P3) => <line x1={p.x - uy * t} y1={p.y + ux * t} x2={p.x + uy * t} y2={p.y - ux * t} stroke={MEASURE} strokeWidth={fs * 0.1} />
+  const text = fmtLength(len)
+  const sub = lengthParts(a, b)
+  const size = fs * 0.75
+  const w = Math.max(text.length * size * 0.62, sub.length * size * 0.5) + fs * 0.8
+  const h = sub ? size * 2.5 : size * 1.5
+  const mx = (a.x + b.x) / 2
+  const my = (a.y + b.y) / 2
+  return (
+    <g opacity={live ? 0.85 : 1}>
+      <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={MEASURE} strokeWidth={fs * 0.1} strokeDasharray={live ? `${fs * 0.4} ${fs * 0.25}` : undefined} />
+      {tick(a)}
+      {tick(b)}
+      <circle cx={a.x} cy={a.y} r={fs * 0.16} fill={MEASURE} />
+      <circle cx={b.x} cy={b.y} r={fs * 0.16} fill={MEASURE} />
+      {len >= 5 && (
+        <g transform={`translate(${mx} ${my})`}>
+          <rect x={-w / 2} y={-h / 2} width={w} height={h} rx={size * 0.4} fill="#fff" stroke={MEASURE} strokeWidth={fs * 0.06} />
+          <text y={sub ? -size * 0.45 : 0} fontSize={size} fontWeight="700" textAnchor="middle" dominantBaseline="central" style={{ fill: MEASURE }}>
+            {text}
+          </text>
+          {sub && (
+            <text y={size * 0.65} fontSize={size * 0.7} textAnchor="middle" dominantBaseline="central" style={{ fill: '#52525b' }}>
+              {sub}
+            </text>
+          )}
+        </g>
+      )}
+    </g>
   )
 }
 

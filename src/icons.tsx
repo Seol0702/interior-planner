@@ -79,6 +79,7 @@ const PATHS = {
       <path d="M5 20.5a7 7 0 0 1 14 0" />
     </>
   ),
+  ruler: <path d="M3 15.5 15.5 3 21 8.5 8.5 21z M7 11.5l2 2 M9.5 9l1.5 1.5 M12 6.5l2 2 M14.5 4l1.5 1.5" />,
   exit: <path d="M14 4h5v16h-5 M10 8l-4 4 4 4 M6 12h10" />,
 } satisfies Record<string, ReactNode>
 

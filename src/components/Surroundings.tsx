@@ -77,7 +77,7 @@ export default function Surroundings({ buildings, ground, groundY, north, center
   return (
     <>
       <fog attach="fog" args={[FOG, 160, 650]} />
-      <mesh geometry={sky} position={[cx, 0, cz]} renderOrder={-1}>
+      <mesh geometry={sky} position={[cx, 0, cz]} renderOrder={-1} userData={{ noMeasure: true }}>
         <meshBasicMaterial vertexColors side={THREE.BackSide} fog={false} depthWrite={false} />
       </mesh>
 

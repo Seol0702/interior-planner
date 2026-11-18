@@ -20,6 +20,7 @@ import WalkBar from './components/WalkBar'
 import SitePanel from './components/SitePanel'
 import { useSurroundings } from './useSurroundings'
 import { DEFAULT_BODY_HEIGHT, bodySize } from './walk'
+import { EMPTY_MEASURE, distance, type MeasureState, type P3 } from './measure'
 import Plan2D from './components/Plan2D'
 import Header from './components/Header'
 import Rail, { type Section } from './components/Rail'
@@ -95,6 +96,7 @@ export default function App() {
   const [layer, setLayer] = useState<LayerView>('all')
   const [tool, setTool] = useState<Tool>('select')
   const [draft, setDraft] = useState<Point[] | null>(null) // 그리고 있는 전선의 점들
+  const [measure, setMeasure] = useState<MeasureState>(EMPTY_MEASURE) // 줄자로 잰 것들
   const [notesVisible, setNotesVisible] = useState(true)
   const [notesExpanded, setNotesExpanded] = useState(false)
   const [lighting, setLighting] = useState<Lighting>({ enabled: false, time: 14, season: 'equinox', night: false, lamps: false })
@@ -483,9 +485,21 @@ export default function App() {
     else if (tool === 'note') addNote(x, y)
   }
 
+  /** 줄자: 첫 번째 누름은 시작점, 두 번째 누름은 끝점 (다 재면 다음 줄자를 또 잴 수 있다) */
+  const addMeasurePoint = (p: P3) =>
+    setMeasure(({ list, start }) => {
+      if (!start) return { list, start: p }
+      if (distance(start, p) < 1) return { list, start } // 같은 자리를 두 번 누른 경우
+      return { list: [...list, { id: Date.now(), a: start, b: p }], start: null }
+    })
+
+  /** 줄자: 찍다 만 시작점 → 마지막으로 잰 것 순서로 지운다 */
+  const undoMeasure = () => setMeasure(({ list, start }) => (start ? { list, start: null } : { list: list.slice(0, -1), start: null }))
+
   const changeTool = (next: Tool) => {
     setTool(next)
     setDraft(null)
+    setMeasure(EMPTY_MEASURE)
     if (next !== 'select') {
       setSelection(null)
       setLayer('all') // 전선·메모가 보이는 상태에서 그리게
@@ -587,11 +601,16 @@ export default function App() {
           setLayer(LAYERS[(i + 1) % LAYERS.length].id)
           break
         }
+        case 'KeyM': changeTool(tool === 'measure' ? 'select' : 'measure'); break
         case 'Delete':
-        case 'Backspace': deleteSelected(); break
+        case 'Backspace':
+          if (tool === 'measure') undoMeasure()
+          else deleteSelected()
+          break
         case 'Enter': if (tool === 'wire') finishWire(); break
         case 'Escape':
-          if (tool !== 'select') changeTool('select')
+          if (tool === 'measure' && measure.start) undoMeasure() // 찍다 만 시작점만 취소
+          else if (tool !== 'select') changeTool('select')
           else setSelection(null)
           break
         case 'ArrowUp': nudge(0, 1, step); break
@@ -719,6 +738,8 @@ export default function App() {
                   visible={visible}
                   tool={tool}
                   draft={draft}
+                  measure={measure}
+                  onMeasure={addMeasurePoint}
                   onSelect={setSelection}
                   onPlanClick={planClick}
                   onFinishWire={finishWire}
@@ -740,6 +761,8 @@ export default function App() {
                   visible={visible}
                   tool={tool}
                   draft={draft}
+                  measure={measure}
+                  onMeasure={addMeasurePoint}
                   lighting={lighting}
                   sun={sun}
                   patches={patches}
@@ -767,7 +790,14 @@ export default function App() {
             <div className="notice tool" role="status">
               {tool === 'wire'
                 ? `전선 그리기 · 바닥을 차례로 눌러 주세요${draft ? ` (${draft.length}개)` : ''} · Enter로 끝, Esc로 취소`
-                : '메모 찍기 · 메모할 자리를 눌러 주세요 · Esc로 취소'}
+                : tool === 'measure'
+                  ? `줄자 · ${measure.start ? '끝점을 눌러 주세요' : '시작점을 눌러 주세요'} · Shift 똑바로 · Esc로 끝`
+                  : '메모 찍기 · 메모할 자리를 눌러 주세요 · Esc로 취소'}
+              {tool === 'measure' && measure.list.length > 0 && (
+                <button className="btn sm" onClick={() => setMeasure(EMPTY_MEASURE)}>
+                  모두 지우기
+                </button>
+              )}
               {tool === 'wire' && draft && draft.length >= 2 && (
                 <button className="btn primary sm" onClick={finishWire}>
                   완료
@@ -786,7 +816,15 @@ export default function App() {
           {walkView ? (
             <WalkBar view={walkView} bodyHeight={bodyHeight} input={walkInput} onView={setWalkView} onBodyHeight={changeBodyHeight} onExit={exitWalk} />
           ) : (
-            <CanvasBar mode={mode} layer={layer} onView={(view: ViewName) => setViewRequest({ view, nonce: Date.now() })} onLayer={setLayer} onWalk={startWalk} />
+            <CanvasBar
+              mode={mode}
+              layer={layer}
+              measuring={tool === 'measure'}
+              onView={(view: ViewName) => setViewRequest({ view, nonce: Date.now() })}
+              onLayer={setLayer}
+              onMeasure={() => changeTool(tool === 'measure' ? 'select' : 'measure')}
+              onWalk={startWalk}
+            />
           )}
 
           {/* 선택한 것의 속성 카드 (화면 오른쪽) */}

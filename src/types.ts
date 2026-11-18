@@ -148,8 +148,8 @@ export type Project = {
 /** 지금 선택된 것 */
 export type Selection = { type: 'room' | 'furniture' | 'wallItem' | 'wire' | 'note'; id: string } | null
 
-/** 마우스 도구: 선택(기본) / 전선 그리기 / 메모 찍기 */
-export type Tool = 'select' | 'wire' | 'note'
+/** 마우스 도구: 선택(기본) / 전선 그리기 / 메모 찍기 / 줄자 */
+export type Tool = 'select' | 'wire' | 'note' | 'measure'
 
 /** 레이어 보기: KiCad에서 앞면·뒷면만 보듯, 보고 싶은 종류만 보기 */
 export type LayerView = 'all' | 'furniture' | 'electric' | 'structure'
